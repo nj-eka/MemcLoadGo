@@ -1,0 +1,20 @@
+#log_file: "" #= stdout
+log_level: "debug"
+#log_format: "json"
+#use_trace: true
+#trace_file: "" #= stderr
+pattern: ~/go/src/github.com/nj-eka/MemcLoadGo/data/appsinstalled/2017*.tsv.gz #./data/appsinstalled/*.tsv.gz # ./data/appsinstalled/h1000*.tsv.gz
+max_loaders_count: 2
+#max_parsers_count: 8
+is_dry: false
+verbose: true
+memc_timeout: 1000ms
+memc_addrs:
+  idfa: 127.0.0.1:33013
+  gaid: 127.0.0.1:33014
+  adid: 127.0.0.1:33015
+  dvid: 127.0.0.1:33016
+dques_dir: data/dques
+dques_buffers_count: 2
+dques_turbo: true
+dques_segment_size: 100000

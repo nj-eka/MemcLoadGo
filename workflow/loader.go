@@ -1,0 +1,257 @@
+package workflow
+
+import (
+	"bufio"
+	"compress/gzip"
+	"context"
+	"fmt"
+	cou "github.com/nj-eka/MemcLoadGo/context_utils"
+	"github.com/nj-eka/MemcLoadGo/errs"
+	"github.com/nj-eka/MemcLoadGo/fh"
+	"github.com/nj-eka/MemcLoadGo/logging"
+	"github.com/nj-eka/MemcLoadGo/regs"
+	"io"
+	"os"
+	"os/user"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+)
+
+//type LoaderStats interface {
+//	FilesCounter() regs.Counter
+//	ItemsCounter() regs.Counter
+//	StartTime() time.Time
+//	EndTime() time.Time
+//}
+
+type LoaderStats struct {
+	StartTime, FinishTime      time.Time
+	FilesCounter, ItemsCounter regs.Counter
+}
+
+//func (r *loaderStats) StartTime() time.Time {
+//	return r.startTime
+//}
+//
+//func (r *loaderStats) EndTime() time.Time {
+//	return r.endTime
+//}
+//
+//func (r *loaderStats) FilesCounter() regs.Counter {
+//	return r.filesCounter
+//}
+//
+//func (r *loaderStats) ItemsCounter() regs.Counter {
+//	return r.linesCounter
+//}
+
+type Loader interface {
+	ResCh() <-chan string
+	ErrCh() <-chan errs.Error
+	Done() <-chan struct{}
+	Run(ctx context.Context, filePaths []string)
+	Stats() *LoaderStats
+}
+
+type loader struct {
+	maxWorkers int
+	usr        *user.User
+	dry        bool
+	resCh      chan string
+	errCh      chan errs.Error
+	done       chan struct{}
+	wg         sync.WaitGroup
+	wp         chan struct{}
+	stats      LoaderStats
+}
+
+func (r *loader) ResCh() <-chan string {
+	return r.resCh
+}
+
+func (r *loader) ErrCh() <-chan errs.Error {
+	return r.errCh
+}
+
+func (r *loader) Done() <-chan struct{} {
+	return r.done
+}
+
+func (r *loader) Stats() *LoaderStats {
+	return &r.stats
+}
+
+func NewLoader(ctx context.Context, maxWorkers int, usr *user.User, dry bool, statsOn bool) Loader {
+	ctx = cou.BuildContext(ctx, cou.SetContextOperation("1.0.loader_init"))
+	return &loader{
+		maxWorkers: maxWorkers,
+		usr:        usr,
+		dry:        dry,
+		done:       make(chan struct{}),
+		wp:         make(chan struct{}, maxWorkers),
+		resCh:      make(chan string, maxWorkers),
+		errCh:      make(chan errs.Error, maxWorkers*8),
+		stats: LoaderStats{
+			FilesCounter: regs.NewCounter(0, statsOn),
+			ItemsCounter: regs.NewCounter(0, statsOn),
+		},
+	}
+}
+
+func (r *loader) Run(ctx context.Context, filePaths []string) {
+	ctx = cou.BuildContext(ctx, cou.SetContextOperation("1.loader"))
+	r.stats.StartTime = time.Now()
+	source := make(chan string)
+
+	go func(ctx context.Context) {
+		ctx = cou.BuildContext(ctx, cou.AddContextOperation("iter_sources"))
+		defer OnExit(ctx, r.errCh, "sources iteration", true,
+			func() {
+				close(source)
+				logging.Msg(ctx).Debug("sources channel closed")
+			})
+		for _, filePath := range filePaths {
+			if fullFilePath, err := fh.ResolvePath(filePath, r.usr); err != nil {
+				r.errCh <- errs.E(ctx, errs.KindInvalidValue, fmt.Errorf("resolving file [%s] failed: %w", filePath, err))
+			} else {
+				select {
+				case <-ctx.Done():
+					return
+				case source <- fullFilePath:
+				}
+			}
+		}
+	}(ctx)
+
+	go func(ctx context.Context) {
+		ctx = cou.BuildContext(ctx, cou.AddContextOperation("wp"))
+		defer OnExit(ctx, r.errCh, "loading workers", true,
+			func() {
+				// wait for graceful closing all open files
+				// with saving unprocessed data in current session
+				// for next start from current position
+				r.wg.Wait()
+				r.stats.FinishTime = time.Now()
+				close(r.wp)
+				close(r.resCh)
+				close(r.errCh)
+				close(r.done)
+			})
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case filePath, more := <-source:
+				if !more {
+					return
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case r.wp <- struct{}{}:
+					r.wg.Add(1)
+					go processFile(ctx, &r.wg, r.wp, filePath, r.resCh, r.errCh, &r.stats, r.dry)
+				}
+			}
+		}
+	}(ctx)
+}
+
+func processFile(ctx context.Context, wg *sync.WaitGroup, wp <-chan struct{}, filePath string, resCh chan<- string, errCh chan<- errs.Error, sts *LoaderStats, dry bool) {
+	ctx = cou.BuildContext(ctx, cou.AddContextOperation("processFile"))
+	defer OnExit(ctx, errCh, fmt.Sprintf("reading file [%s]", filePath), true, func() {
+		sts.FilesCounter.Add(1)
+		<-wp
+		wg.Done()
+	})
+	if file, err := os.Open(filePath); err == nil {
+		logging.Msg(ctx).Debug("> open ", filePath)
+		defer func() {
+			err := file.Close()
+			logging.Msg(ctx).Debug("> close ", filePath, " with err:", err)
+			if !dry {
+				path, name := filepath.Split(filePath)
+				if err := os.Rename(filePath, filepath.Join(path, "."+name)); err != nil {
+					errCh <- errs.E(ctx, errs.KindIO, fmt.Errorf("renaming file [%s] failed: %w", filePath, err))
+				}
+			}
+		}()
+		if fileInfo, err := file.Stat(); err == nil {
+			if gz, err := gzip.NewReader(file); err == nil {
+				logging.Msg(ctx).Debug("> gzip open ", filePath)
+				defer func() {
+					err := gz.Close()
+					logging.Msg(ctx).Debug("< gzip read ", filePath, "  closed with err:", err)
+				}()
+				bufSize := 64 * 1024 * 1024 // todo: make ram dependent or add as config option
+				if fileInfo.Size() < int64(bufSize) {
+					bufSize = int(fileInfo.Size())
+				}
+				reader := bufio.NewReaderSize(gz, bufSize)
+				for {
+					line, err := reader.ReadString('\n') // delim <- gz.Header.OS
+					if err != nil && err != io.EOF {
+						lines, bytes := sts.ItemsCounter.GetCountScore()
+						errCh <- errs.E(ctx, errs.KindGzip, fmt.Errorf(
+							"< gzip read [%s] failed with %d/%d read and err: %w",
+							filePath,
+							lines, bytes,
+							err,
+						))
+						return
+					}
+					line = strings.TrimRight(line, "\n")
+					if len(line) > 0 { // skip empty string
+						select {
+						case <-ctx.Done():
+							logging.Msg(ctx).Infof("processing file [%s] is stopped at the line: <%s>", filePath, line)
+							if !dry {
+								path, name := filepath.Split(filePath)
+								target := filepath.Join(path, fmt.Sprintf("_%s_%s.gz", time.Now().Format("20060102150405"), strings.TrimRight(name, filepath.Ext(name))))
+								if writer, err := os.Create(target); err == nil {
+									logging.Msg(ctx).Debug("> create discard file ", target)
+									defer func() {
+										err := writer.Close()
+										logging.Msg(ctx).Debug("< discard file [", target, "] closed with err: ", err)
+									}()
+									archiver := gzip.NewWriter(writer)
+									archiver.Name = gz.Name
+									defer func() {
+										err := archiver.Close()
+										logging.Msg(ctx).Debug("< gzip discard file [", target, "] closed with err: ", err)
+									}()
+									// save current / last line not sent yet for next stage of processing
+									_, err := archiver.Write([]byte(line))
+									if err == nil {
+										// save rest of current open file for next session
+										_, err = io.Copy(archiver, reader)
+									}
+									if err != nil {
+										errCh <- errs.E(ctx, errs.KindGzip, fmt.Errorf("< gzip write to discard file [%s] failed: %w", target, err))
+									}
+								} else {
+									errCh <- errs.E(ctx, errs.KindOpenFile, fmt.Errorf("< create discard file [%s] failed: %w", target, err))
+								}
+							}
+							return
+						case resCh <- line:
+							sts.ItemsCounter.Add(len(line))
+						}
+					}
+					if err == io.EOF {
+						logging.Msg(ctx).Infof("read input file [%s] - ok: (%d/%d)", filePath, sts.ItemsCounter.GetCount(), sts.ItemsCounter.GetScore())
+						return
+					}
+				}
+			} else {
+				errCh <- errs.E(ctx, errs.KindGzip, fmt.Errorf("< gzip open [%s] failed: %w", filePath, err))
+			}
+		} else {
+			errCh <- errs.E(ctx, errs.KindIO, fmt.Errorf("< stat [%s] failed: %w", filePath, err))
+		}
+	} else {
+		errCh <- errs.E(ctx, errs.KindOpenFile, fmt.Errorf("< open [%s] failed: %w", filePath, err))
+	}
+}
