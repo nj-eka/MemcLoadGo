@@ -12,7 +12,10 @@ with adding the following features:
   - OS: Linux
   - Service: memchache
 ### Install:
-    > go get https://github.com/nj-eka/MemcLoadGo
+    > git clone https://github.com/nj-eka/MemcLoadGo
+    > cd MemcLoadGo
+    > go mod tidy
+    > go build .
 ### Usage:
     > ./memc.sh
     > ./MemcLoadGo --help
