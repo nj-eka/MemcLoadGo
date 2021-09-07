@@ -48,8 +48,8 @@ func PrintProcessMonitors(
 		fmt.Print(colorBlue)
 		fmt.Printf("Loader stats (read): %s - %v\n", status, since.Seconds())
 		lines, bytes := loaderStats.ItemsCounter.GetCountScore()
-		fmt.Printf("%8s(lines: %8s per sec)", fh.BytesToHuman(uint64(lines)), fh.BytesToHuman(uint64(math.Ceil(float64(lines)/since.Seconds()))))
-		fmt.Printf("%8s(bytes: %8s per sec)", fh.BytesToHuman(uint64(bytes)), fh.BytesToHuman(uint64(math.Ceil(float64(bytes)/since.Seconds()))))
+		fmt.Printf("%8s(lines: %8s/s)", fh.BytesToHuman(uint64(lines)), fh.BytesToHuman(uint64(math.Ceil(float64(lines)/since.Seconds()))))
+		fmt.Printf("%8s(bytes: %8s/s)", fh.BytesToHuman(uint64(bytes)), fh.BytesToHuman(uint64(math.Ceil(float64(bytes)/since.Seconds()))))
 		fmt.Printf("%3d(files)\n", loaderStats.FilesCounter.GetScore())
 
 		fmt.Print(colorGreen, "Parser stats (proto):\n")

@@ -51,7 +51,6 @@ type MemcacheAddresses struct {
 }
 
 type Config struct {
-
 	//// 0. logging
 	// logging output file, if empty then os.Stdout
 	LogFile string `config:"log,description=Path to logging output file (empty = os.Stdout)" yaml:"log_file"`
@@ -72,7 +71,7 @@ type Config struct {
 	// 1.1 input
 	// input files pattern. example: ./data/appsinstalled/h1000*.tsv.gz
 	Pattern string `config:"pattern,short=p,description=Input files pattern" yaml:"pattern"`
-	// 1.2.0 output
+	// 1.2 output
 	//memc_addr:
 	//  idfa: 127.0.0.1:33013
 	//  gaid: 127.0.0.1:33014
@@ -85,15 +84,8 @@ type Config struct {
 	// 2. use predefined sets - here
 	// 3. extend confita...
 	MemcAddrsPredefined MemcacheAddresses
-	// 1.2.1 memcache
-	// Timeout specifies the socket read/write timeout. If zero, DefaultTimeout is used.100 * time.Millisecond
-	MemcTimeout time.Duration `config:"timeout,description=memcache operation timeout" yaml:"memc_timeout"`
-	// maximum number of write attempts without generating error
-	MemcMaxRetries int `config:"retries,description=memcache max retries" yaml:"memc_retries"`
-	// min timeout between retries
-	MemcRetryTimeout time.Duration `config:"retry_timeout,description=memcache retry timeout" yaml:"memc_retry_timeout"`
 
-	//// 2. workers settings
+	//// 2. workers
 	//// 2.0
 	// Display processing statistics (os.Stdout)
 	Verbose bool `config:"verbose,short=v,description=Display processing statistics (os.Stdout)" yaml:"verbose"`
@@ -102,12 +94,20 @@ type Config struct {
 	MaxLoaders int `config:"loaders,description=Max count of loaders (max number of open input files)" yaml:"max_loaders_count"`
 	// Max count of concurrent data parsing workers (input line -> proto data -> device channel)
 	MaxParsers int `config:"parsers,description=Max count of parsers" yaml:"max_parsers_count"`
-	//// 2.2 buffering processed data
+	//// 2.2 durable buffering
 	DQuesDir          string `config:"dques,description=Dqueue directory" yaml:"dques_dir"`
 	DQuesWorkersCount int    `config:"buffers,description=Buffers count per device type" yaml:"dques_buffers_count"`
 	DQueResume        bool   `config:"resume,description=Resume from previous sessions" yaml:"dques_resume"`
 	DQuesTurbo        bool   `config:"turbo,description=Dqueue turbo mode" yaml:"dques_turbo"`
 	DQuesSegmentSize  int    `config:"segment,description=Items per dqueue segment" yaml:"dques_segment_size"`
+	// 2.3 memcache
+	// Timeout specifies the socket read/write timeout. If zero, DefaultTimeout is used.100 * time.Millisecond
+	MemcTimeout time.Duration `config:"timeout,description=memcache operation timeout" yaml:"memc_timeout"`
+	// maximum number of write attempts without generating error
+	MemcMaxRetries int `config:"retries,description=memcache max retries" yaml:"memc_retries"`
+	// min timeout between retries
+	MemcRetryTimeout time.Duration `config:"retry_timeout,description=memcache retry timeout" yaml:"memc_retry_timeout"`
+
 }
 
 var cfg = Config{
