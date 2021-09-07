@@ -1,11 +1,6 @@
-#log_file: "" #= stdout
-log_level: "debug"
-#log_format: "json"
-#use_trace: true
-#trace_file: "" #= stderr
+log_level: debug
 pattern: ~/go/src/github.com/nj-eka/MemcLoadGo/data/appsinstalled/2017*.tsv.gz #./data/appsinstalled/*.tsv.gz # ./data/appsinstalled/h1000*.tsv.gz
 max_loaders_count: 2
-#max_parsers_count: 8
 is_dry: false
 verbose: true
 memc_timeout: 1000ms
