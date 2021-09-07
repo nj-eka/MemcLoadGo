@@ -1,5 +1,5 @@
 log_level: debug
-pattern: ~/go/src/github.com/nj-eka/MemcLoadGo/data/appsinstalled/2017*.tsv.gz #./data/appsinstalled/*.tsv.gz # ./data/appsinstalled/h1000*.tsv.gz
+pattern: ~/go/src/github.com/nj-eka/MemcLoadGo/data/appsinstalled/h100000*.tsv.gz #./data/appsinstalled/*.tsv.gz # ./data/appsinstalled/h1000*.tsv.gz
 max_loaders_count: 2
 is_dry: false
 verbose: true
