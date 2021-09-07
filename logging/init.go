@@ -14,9 +14,11 @@ import (
 	"strings"
 )
 
-const DefaultLevel = logrus.InfoLevel
-const DefaultFormat = "text"
-const DefaultTimeFormat = "2006/01/02 15:04:05.00000"
+const (
+	DefaultLevel      = logrus.InfoLevel
+	DefaultFormat     = "text"
+	DefaultTimeFormat = "2006/01/02 15:04:05.00000"
+)
 
 var logFile, traceFile *os.File
 
