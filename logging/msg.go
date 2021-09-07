@@ -3,7 +3,7 @@ package logging
 import (
 	"context"
 	"fmt"
-	cou "github.com/nj-eka/MemcLoadGo/ctxutils"
+	cu "github.com/nj-eka/MemcLoadGo/ctxutils"
 	"github.com/sirupsen/logrus"
 	"time"
 )
@@ -16,7 +16,7 @@ func Msg(args ...interface{}) *logrus.Entry {
 	})
 	if len(args) == 1 {
 		switch arg := args[0].(type) {
-		case cou.Operation, cou.Operations:
+		case cu.Operation, cu.Operations:
 			return entry.WithField("ops", fmt.Sprintf("%s", arg))
 		case context.Context:
 			return entry.WithContext(arg)

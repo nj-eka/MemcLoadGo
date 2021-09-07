@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/joncrlsn/dque"
-	cou "github.com/nj-eka/MemcLoadGo/ctxutils"
+	cu "github.com/nj-eka/MemcLoadGo/ctxutils"
 	"github.com/nj-eka/MemcLoadGo/errs"
 	"github.com/nj-eka/MemcLoadGo/logging"
 	"github.com/nj-eka/MemcLoadGo/regs"
@@ -60,7 +60,7 @@ type deviceTypeDBuffer struct {
 }
 
 func (r *deviceTypeDBuffer) Run(ctx context.Context, dtInputChs map[DeviceType]chan *ProtoUserApps) {
-	ctx = cou.BuildContext(ctx, cou.SetContextOperation("3.dbuf"))
+	ctx = cu.BuildContext(ctx, cu.SetContextOperation("3.dbuf"))
 	// keys of map[DeviceType]chan *ProtoUserApps == keys of deviceTypes map[DeviceType]bool
 	var wg sync.WaitGroup
 	wg.Add(len(dtInputChs) + len(r.dBufs)) // should be == 2 * len(deviceTypes)
@@ -79,7 +79,7 @@ func (r *deviceTypeDBuffer) Run(ctx context.Context, dtInputChs map[DeviceType]c
 			workerName := GetWorkerName(deviceType, workerNum)
 
 			go func(ctx context.Context, wg *sync.WaitGroup, workerName string, inputCh <-chan *ProtoUserApps, dBuf *dbuf, stats *DBufferStats) {
-				ctx = cou.BuildContext(ctx, cou.AddContextOperation(cou.Operation(fmt.Sprintf("enqueue %s", workerName))))
+				ctx = cu.BuildContext(ctx, cu.AddContextOperation(cu.Operation(fmt.Sprintf("enqueue %s", workerName))))
 				logging.Msg(ctx).Debugf("start pumping into [%s]", workerName)
 				defer func() {
 					stats.EndTime = time.Now()
@@ -107,7 +107,7 @@ func (r *deviceTypeDBuffer) Run(ctx context.Context, dtInputChs map[DeviceType]c
 			workerName := GetWorkerName(deviceType, workerNum)
 
 			go func(ctx context.Context, wg *sync.WaitGroup, workerName string, outputCh chan<- *ProtoUserApps, dBuf *dbuf, stats *DBufferStats) {
-				ctx = cou.BuildContext(ctx, cou.AddContextOperation(cou.Operation(fmt.Sprintf("dequeue %s", workerName))))
+				ctx = cu.BuildContext(ctx, cu.AddContextOperation(cu.Operation(fmt.Sprintf("dequeue %s", workerName))))
 				logging.Msg(ctx).Debugf("start pumping out from [%s]", workerName)
 				defer OnExit(ctx, r.errCh, fmt.Sprintf("pumping out from [%s]", workerName), true, func() {
 					stats.EndTime = time.Now()
@@ -175,7 +175,7 @@ func (r *deviceTypeDBuffer) Stats() *DeviceTypeDBufferStats {
 }
 
 func NewDTDBuffer(ctx context.Context, dtInputChs map[DeviceType]chan *ProtoUserApps, workersCount int, dirPath string, itemsPerSegment int, resume bool, turbo bool, statsOn bool) (DeviceTypeDBuffer, error) {
-	ctx = cou.BuildContext(ctx, cou.SetContextOperation("3.0.dbuf_init"))
+	ctx = cu.BuildContext(ctx, cu.SetContextOperation("3.0.dbuf_init"))
 	outputChs := make(map[DeviceType]chan *ProtoUserApps, len(dtInputChs))
 	dBufs := make(map[string]*dbuf, len(dtInputChs)*workersCount)
 	stats := DeviceTypeDBufferStats{

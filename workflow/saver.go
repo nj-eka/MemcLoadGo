@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/bradfitz/gomemcache/memcache"
-	cou "github.com/nj-eka/MemcLoadGo/ctxutils"
+	cu "github.com/nj-eka/MemcLoadGo/ctxutils"
 	"github.com/nj-eka/MemcLoadGo/errs"
 	"github.com/nj-eka/MemcLoadGo/logging"
 	"github.com/nj-eka/MemcLoadGo/regs"
@@ -43,7 +43,7 @@ type memcSavers struct {
 
 // todo: as option - to improve performance 1) add workers per deviceType or/and 2) use memcache connections pool (if client has one ...)
 func NewMemcSaver(ctx context.Context, addrs map[string]string, dry bool, timeout time.Duration, maxRetries int, retryTimeout time.Duration, statsOn bool) (Saver, errs.Error) {
-	ctx = cou.BuildContext(ctx, cou.SetContextOperation("4.0.memc_saver_init"))
+	ctx = cu.BuildContext(ctx, cu.SetContextOperation("4.0.memc_saver_init"))
 	memcClients := make(map[DeviceType]*memcache.Client, len(addrs))
 	stats := DeviceTypeSaverStats{DTStats: make(map[DeviceType]*SaverStats, len(addrs)), StartTime: time.Now()}
 	for dt, addr := range addrs {
@@ -77,10 +77,10 @@ func NewMemcSaver(ctx context.Context, addrs map[string]string, dry bool, timeou
 }
 
 func (r *memcSavers) Run(ctx context.Context, dtInputs map[DeviceType]chan *ProtoUserApps) {
-	ctx = cou.BuildContext(ctx, cou.SetContextOperation("3.saving"))
+	ctx = cu.BuildContext(ctx, cu.SetContextOperation("3.saving"))
 
 	go func() {
-		ctx = cou.BuildContext(ctx, cou.AddContextOperation("workers"))
+		ctx = cu.BuildContext(ctx, cu.AddContextOperation("workers"))
 		r.wg.Add(len(r.memcClients))
 		// on exit
 		defer func() {
@@ -103,7 +103,7 @@ func (r *memcSavers) Run(ctx context.Context, dtInputs map[DeviceType]chan *Prot
 		for deviceType := range r.memcClients {
 
 			go func(ctx context.Context, deviceType DeviceType) {
-				ctx = cou.BuildContext(ctx, cou.AddContextOperation(cou.Operation(fmt.Sprintf("mc-%s", deviceType))))
+				ctx = cu.BuildContext(ctx, cu.AddContextOperation(cu.Operation(fmt.Sprintf("mc-%s", deviceType))))
 				logging.Msg(ctx).Debugf("memc [%s] - started", deviceType)
 				defer OnExit(ctx, r.errCh, fmt.Sprintf("memc [%s]", deviceType), true,
 					func() {

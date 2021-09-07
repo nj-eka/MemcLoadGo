@@ -3,7 +3,7 @@ package logging
 import (
 	"context"
 	"fmt"
-	cou "github.com/nj-eka/MemcLoadGo/ctxutils"
+	cu "github.com/nj-eka/MemcLoadGo/ctxutils"
 	"github.com/nj-eka/MemcLoadGo/errs"
 	"github.com/nj-eka/MemcLoadGo/fh"
 	"github.com/sirupsen/logrus"
@@ -23,7 +23,7 @@ const (
 var logFile, traceFile *os.File
 
 func Initialize(ctx context.Context, logFileName, level, format, traceFileName string, usr *user.User) errs.Error {
-	ctx = cou.BuildContext(ctx, cou.AddContextOperation("log_init"))
+	ctx = cu.BuildContext(ctx, cu.AddContextOperation("log_init"))
 	logrus.SetOutput(os.Stdout)
 	logrus.RegisterExitHandler(Finalize)
 	if logFileName != "" {
@@ -102,7 +102,7 @@ func Initialize(ctx context.Context, logFileName, level, format, traceFileName s
 }
 
 func Finalize() {
-	op := cou.Operation("log_finalize")
+	op := cu.Operation("log_finalize")
 	if traceFile != nil {
 		trace.Stop()
 		Msg(op).Trace("trace stopped")

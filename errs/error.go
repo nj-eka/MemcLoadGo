@@ -3,7 +3,7 @@ package errs
 import (
 	"context"
 	"errors"
-	cou "github.com/nj-eka/MemcLoadGo/ctxutils"
+	cu "github.com/nj-eka/MemcLoadGo/ctxutils"
 	"time"
 )
 
@@ -12,7 +12,7 @@ type Error interface {
 	Severity() Severity
 	TimeStamp() time.Time
 	Kind() Kind
-	OperationPath() cou.Operations
+	OperationPath() cu.Operations
 	StackTrace() []Frame
 	Unwrap() error
 }
@@ -34,12 +34,12 @@ func E(args ...interface{}) Error {
 			e.severity = a
 		case Kind:
 			e.kind = a
-		case cou.Operation:
-			e.ops = cou.Operations{[]cou.Operation{a}}
-		case cou.Operations:
+		case cu.Operation:
+			e.ops = cu.Operations{[]cu.Operation{a}}
+		case cu.Operations:
 			e.ops = a
 		case context.Context:
-			e.ops = cou.GetContextOperations(a)
+			e.ops = cu.GetContextOperations(a)
 		case Error: // todo: impl transient error in this case
 			e.err = a
 		case error:

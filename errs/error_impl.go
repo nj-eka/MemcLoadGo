@@ -1,16 +1,16 @@
 package errs
 
 import (
-	cou "github.com/nj-eka/MemcLoadGo/ctxutils"
+	cu "github.com/nj-eka/MemcLoadGo/ctxutils"
 	"time"
 )
 
 type errorData struct {
 	err      error
 	severity Severity
-	kind     Kind
-	ops      cou.Operations
-	frames   []Frame
+	kind   Kind
+	ops    cu.Operations
+	frames []Frame
 	ts       int64
 }
 
@@ -41,7 +41,7 @@ func (e errorData) Kind() Kind {
 	return e.kind
 }
 
-func (e errorData) OperationPath() cou.Operations {
+func (e errorData) OperationPath() cu.Operations {
 	return e.ops
 }
 

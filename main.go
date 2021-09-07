@@ -8,18 +8,18 @@ import (
 	"github.com/heetch/confita/backend/env"
 	"github.com/heetch/confita/backend/file"
 	"github.com/heetch/confita/backend/flags"
-	cou "github.com/nj-eka/MemcLoadGo/ctxutils"
+	cu "github.com/nj-eka/MemcLoadGo/ctxutils"
 	"github.com/nj-eka/MemcLoadGo/errs"
-	errflow "github.com/nj-eka/MemcLoadGo/errsflow"
+	erf "github.com/nj-eka/MemcLoadGo/errsflow"
 	"github.com/nj-eka/MemcLoadGo/fh"
 	"github.com/nj-eka/MemcLoadGo/logging"
 	"github.com/nj-eka/MemcLoadGo/output"
-	"github.com/nj-eka/MemcLoadGo/workflow"
+	wrf "github.com/nj-eka/MemcLoadGo/workflow"
 	log "github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
 	"os/user"
-	"path/filepath"
+	fp "path/filepath"
 	"runtime"
 	"time"
 )
@@ -38,7 +38,7 @@ const (
 )
 
 var (
-	AppName           = filepath.Base(os.Args[0])
+	AppName           = fp.Base(os.Args[0])
 	DefaultConfigFile = "config.yml" // fmt.Sprintf("./%s.yml", AppName)
 	DefaultLogFile    = fmt.Sprintf("%s.log", AppName)
 	DefaultTraceFile  = fmt.Sprintf("%s.trace.out", AppName)
@@ -114,6 +114,7 @@ type Config struct {
 
 }
 
+// default config values
 var cfg = Config{
 	LogFile:                 DefaultLogFile,
 	LogLevel:                logging.DefaultLevel.String(),
@@ -138,12 +139,12 @@ var cfg = Config{
 var (
 	currentUser *user.User
 	inputFiles  []string
-	deviceTypes = make(map[workflow.DeviceType]bool)
+	deviceTypes = make(map[wrf.DeviceType]bool)
 	startTime   = time.Now()
 )
 
 func init() {
-	ctx := cou.BuildContext(context.Background(), cou.SetContextOperation("00.init"))
+	ctx := cu.BuildContext(context.Background(), cu.SetContextOperation("00.init"))
 	var err error
 	loader := conf.NewLoader(
 		file.NewBackend(DefaultConfigFile),
@@ -168,7 +169,7 @@ func init() {
 		cfg.MemcAddrs["dvid"] = cfg.MemcAddrsPredefined.DVID
 	}
 	for deviceType := range cfg.MemcAddrs {
-		deviceTypes[workflow.DeviceType(deviceType)] = true
+		deviceTypes[wrf.DeviceType(deviceType)] = true
 	}
 	if err = logging.Initialize(ctx, cfg.LogFile, cfg.LogLevel, cfg.LogFormat, cfg.TraceFile, currentUser); err != nil {
 		logging.LogError(err)
@@ -178,7 +179,7 @@ func init() {
 		logging.LogError(ctx, errs.SeverityCritical, errs.KindInvalidValue, fmt.Errorf("invalid pattern: %w", err))
 		log.Exit(1)
 	}
-	if inputFiles, err = filepath.Glob(cfg.Pattern); err != nil {
+	if inputFiles, err = fp.Glob(cfg.Pattern); err != nil {
 		logging.LogError(ctx, errs.SeverityCritical, errs.KindInvalidValue, fmt.Errorf("invalid pattern: %w", err))
 		log.Exit(1)
 	}
@@ -211,7 +212,7 @@ func allDone(ds []<-chan struct{}) <-chan struct{} {
 func main() {
 	defer logging.Finalize()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-	ctx = cou.BuildContext(ctx, cou.SetContextOperation("0.main"))
+	ctx = cu.BuildContext(ctx, cu.SetContextOperation("0.main"))
 	defer func() {
 		<-allDone(append(doneChs, ctx.Done()))
 	}()
@@ -228,20 +229,20 @@ func main() {
 		return
 	}
 	// workflow init
-	loader := workflow.NewLoader(ctx, cfg.MaxLoaders, currentUser, cfg.IsDry, cfg.Verbose)
-	parser := workflow.NewParser(ctx, cfg.MaxParsers, deviceTypes, cfg.IgnoreUnknownDeviceType, cfg.Verbose)
-	dbuf, err := workflow.NewDTDBuffer(ctx, parser.ResChs(), cfg.DQuesWorkersCount, cfg.DQuesDir, cfg.DQuesSegmentSize, cfg.DQueResume, cfg.DQuesTurbo, cfg.Verbose)
+	loader := wrf.NewLoader(ctx, cfg.MaxLoaders, currentUser, cfg.IsDry, cfg.Verbose)
+	parser := wrf.NewParser(ctx, cfg.MaxParsers, deviceTypes, cfg.IgnoreUnknownDeviceType, cfg.Verbose)
+	dbuf, err := wrf.NewDTDBuffer(ctx, parser.ResChs(), cfg.DQuesWorkersCount, cfg.DQuesDir, cfg.DQuesSegmentSize, cfg.DQueResume, cfg.DQuesTurbo, cfg.Verbose)
 	if err != nil {
 		logging.LogError(err)
 		return
 	}
-	saver, err := workflow.NewMemcSaver(ctx, cfg.MemcAddrs, cfg.IsDry, cfg.MemcTimeout, cfg.MemcMaxRetries, cfg.MemcRetryTimeout, cfg.Verbose)
+	saver, err := wrf.NewMemcSaver(ctx, cfg.MemcAddrs, cfg.IsDry, cfg.MemcTimeout, cfg.MemcMaxRetries, cfg.MemcRetryTimeout, cfg.Verbose)
 	if err != nil {
 		logging.LogError(err)
 		return
 	}
 	// make error handling flow available
-	errsMonitors := errflow.LaunchErrorHandlers(ctx, cancel, cfg.Verbose, loader.ErrCh(), parser.ErrCh(), dbuf.ErrCh(), saver.ErrCh())
+	errsMonitors := erf.LaunchErrorHandlers(ctx, cancel, cfg.Verbose, loader.ErrCh(), parser.ErrCh(), dbuf.ErrCh(), saver.ErrCh())
 	// compose done channels
 	doneChs = append(doneChs, loader.Done(), parser.Done(), dbuf.Done(), saver.Done(), errsMonitors.Done)
 	finish := allDone(doneChs)

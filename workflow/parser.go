@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/nj-eka/MemcLoadGo/appsinstalled"
-	cou "github.com/nj-eka/MemcLoadGo/ctxutils"
+	cu "github.com/nj-eka/MemcLoadGo/ctxutils"
 	"github.com/nj-eka/MemcLoadGo/errs"
 	"github.com/nj-eka/MemcLoadGo/logging"
 	"github.com/nj-eka/MemcLoadGo/regs"
@@ -96,7 +96,7 @@ func (r *parser) Stats() *DeviceTypeParserStats {
 }
 
 func NewParser(ctx context.Context, maxWorkers int, deviceTypes map[DeviceType]bool, ignoreUnknownDeviceType bool, statsOn bool) Parser {
-	ctx = cou.BuildContext(ctx, cou.SetContextOperation("2.0.parser_init"))
+	ctx = cu.BuildContext(ctx, cu.SetContextOperation("2.0.parser_init"))
 	resChs := make(map[DeviceType]chan *ProtoUserApps, len(deviceTypes))
 	dtStats := DeviceTypeParserStats{DTStats: make(map[DeviceType]ParserStats, len(deviceTypes))}
 	for deviceType := range deviceTypes {
@@ -119,11 +119,11 @@ func NewParser(ctx context.Context, maxWorkers int, deviceTypes map[DeviceType]b
 }
 
 func (r *parser) Run(ctx context.Context, inputCh <-chan string) {
-	ctx = cou.BuildContext(ctx, cou.SetContextOperation("2.parser"))
+	ctx = cu.BuildContext(ctx, cu.SetContextOperation("2.parser"))
 	r.stats.StartTime = time.Now()
 
 	go func(ctx context.Context) {
-		ctx = cou.BuildContext(ctx, cou.AddContextOperation("wp"))
+		ctx = cu.BuildContext(ctx, cu.AddContextOperation("wp"))
 		defer OnExit(ctx, r.errCh, "parsing workers", true,
 			func() {
 				r.wg.Wait()
@@ -146,7 +146,7 @@ func (r *parser) Run(ctx context.Context, inputCh <-chan string) {
 }
 
 func processInputString(ctx context.Context, wg *sync.WaitGroup, wp <-chan struct{}, inputString string, resChs map[DeviceType]chan *ProtoUserApps, errCh chan<- errs.Error, ignoreUnknownDeviceType bool, sts DeviceTypeParserStats) {
-	ctx = cou.BuildContext(ctx, cou.AddContextOperation("processInputString"))
+	ctx = cu.BuildContext(ctx, cu.AddContextOperation("processInputString"))
 	defer OnExit(ctx, errCh, fmt.Sprintf("parsing input string [%s]", inputString), false,
 		func() {
 			<-wp

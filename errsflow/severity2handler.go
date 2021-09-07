@@ -2,7 +2,7 @@ package errflow
 
 import (
 	"context"
-	cou "github.com/nj-eka/MemcLoadGo/ctxutils"
+	cu "github.com/nj-eka/MemcLoadGo/ctxutils"
 	"github.com/nj-eka/MemcLoadGo/errs"
 	"github.com/nj-eka/MemcLoadGo/logging"
 	"sync"
@@ -16,7 +16,7 @@ func MapErrorHandlers(
 	handlers map[errs.Severity]FuncErrorHandler,
 	defaulthandler FuncErrorHandler,
 ) <-chan struct{} {
-	ctx = cou.BuildContext(ctx, cou.AddContextOperation("c.handle"))
+	ctx = cu.BuildContext(ctx, cu.AddContextOperation("c.handle"))
 	done := make(chan struct{})
 	var wg sync.WaitGroup
 	for severity, cerr := range scerr {

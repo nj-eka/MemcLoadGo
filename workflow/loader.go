@@ -5,7 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
-	cou "github.com/nj-eka/MemcLoadGo/ctxutils"
+	cu "github.com/nj-eka/MemcLoadGo/ctxutils"
 	"github.com/nj-eka/MemcLoadGo/errs"
 	"github.com/nj-eka/MemcLoadGo/fh"
 	"github.com/nj-eka/MemcLoadGo/logging"
@@ -84,7 +84,7 @@ func (r *loader) Stats() *LoaderStats {
 }
 
 func NewLoader(ctx context.Context, maxWorkers int, usr *user.User, dry bool, statsOn bool) Loader {
-	ctx = cou.BuildContext(ctx, cou.SetContextOperation("1.0.loader_init"))
+	ctx = cu.BuildContext(ctx, cu.SetContextOperation("1.0.loader_init"))
 	return &loader{
 		maxWorkers: maxWorkers,
 		usr:        usr,
@@ -101,12 +101,12 @@ func NewLoader(ctx context.Context, maxWorkers int, usr *user.User, dry bool, st
 }
 
 func (r *loader) Run(ctx context.Context, filePaths []string) {
-	ctx = cou.BuildContext(ctx, cou.SetContextOperation("1.loader"))
+	ctx = cu.BuildContext(ctx, cu.SetContextOperation("1.loader"))
 	r.stats.StartTime = time.Now()
 	source := make(chan string)
 
 	go func(ctx context.Context) {
-		ctx = cou.BuildContext(ctx, cou.AddContextOperation("iter_sources"))
+		ctx = cu.BuildContext(ctx, cu.AddContextOperation("iter_sources"))
 		defer OnExit(ctx, r.errCh, "sources iteration", true,
 			func() {
 				close(source)
@@ -126,7 +126,7 @@ func (r *loader) Run(ctx context.Context, filePaths []string) {
 	}(ctx)
 
 	go func(ctx context.Context) {
-		ctx = cou.BuildContext(ctx, cou.AddContextOperation("wp"))
+		ctx = cu.BuildContext(ctx, cu.AddContextOperation("wp"))
 		defer OnExit(ctx, r.errCh, "loading workers", true,
 			func() {
 				// wait for graceful closing all open files
@@ -160,7 +160,7 @@ func (r *loader) Run(ctx context.Context, filePaths []string) {
 }
 
 func processFile(ctx context.Context, wg *sync.WaitGroup, wp <-chan struct{}, filePath string, resCh chan<- string, errCh chan<- errs.Error, sts *LoaderStats, dry bool) {
-	ctx = cou.BuildContext(ctx, cou.AddContextOperation("processFile"))
+	ctx = cu.BuildContext(ctx, cu.AddContextOperation("processFile"))
 	defer OnExit(ctx, errCh, fmt.Sprintf("reading file [%s]", filePath), true, func() {
 		sts.FilesCounter.Add(1)
 		<-wp

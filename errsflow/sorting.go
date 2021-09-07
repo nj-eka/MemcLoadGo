@@ -2,14 +2,14 @@ package errflow
 
 import (
 	"context"
-	cou "github.com/nj-eka/MemcLoadGo/ctxutils"
+	cu "github.com/nj-eka/MemcLoadGo/ctxutils"
 	"github.com/nj-eka/MemcLoadGo/errs"
 	"github.com/nj-eka/MemcLoadGo/logging"
 	"github.com/nj-eka/MemcLoadGo/regs"
 )
 
 func SortFilteredErrors(ctx context.Context, cerr <-chan errs.Error, filterSeverities []errs.Severity, statsOn bool) (map[errs.Severity]chan errs.Error, regs.Decounter) {
-	ctx = cou.BuildContext(ctx, cou.AddContextOperation("b.sort"))
+	ctx = cu.BuildContext(ctx, cu.AddContextOperation("b.sort"))
 	scerr := make(map[errs.Severity]chan errs.Error)
 	stats := regs.NewDecounter(len(errs.AllSeverities)*int(errs.KindInternal)*64, statsOn)
 	for _, severity := range filterSeverities {

@@ -2,7 +2,7 @@ package errflow
 
 import (
 	"context"
-	cou "github.com/nj-eka/MemcLoadGo/ctxutils"
+	cu "github.com/nj-eka/MemcLoadGo/ctxutils"
 	"github.com/nj-eka/MemcLoadGo/errs"
 	"github.com/nj-eka/MemcLoadGo/logging"
 
@@ -12,7 +12,7 @@ import (
 // MergeErrors merges multiple channels of errors.
 // Based on https://blog.golang.org/pipelines.
 func MergeErrors(ctx context.Context, cerrs ...<-chan errs.Error) <-chan errs.Error {
-	ctx = cou.BuildContext(ctx, cou.AddContextOperation("a.merge"))
+	ctx = cu.BuildContext(ctx, cu.AddContextOperation("a.merge"))
 	var wg sync.WaitGroup
 	// We must ensure that the output channel has the reading capacity to hold as many errors
 	// as there could be written to all error channels at once.
