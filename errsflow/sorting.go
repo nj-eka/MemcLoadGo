@@ -2,23 +2,25 @@ package errflow
 
 import (
 	"context"
+	cou "github.com/nj-eka/MemcLoadGo/ctxutils"
 	"github.com/nj-eka/MemcLoadGo/errs"
 	"github.com/nj-eka/MemcLoadGo/logging"
 	"github.com/nj-eka/MemcLoadGo/regs"
 )
 
-// SortFilteredErrors
 func SortFilteredErrors(ctx context.Context, cerr <-chan errs.Error, filterSeverities []errs.Severity, statsOn bool) (map[errs.Severity]chan errs.Error, regs.Decounter) {
+	ctx = cou.BuildContext(ctx, cou.AddContextOperation("b.sort"))
 	scerr := make(map[errs.Severity]chan errs.Error)
 	stats := regs.NewDecounter(len(errs.AllSeverities)*int(errs.KindInternal)*64, statsOn)
 	for _, severity := range filterSeverities {
 		scerr[severity] = make(chan errs.Error, cap(cerr))
+		logging.Msg(ctx).Debug("errs channel [", severity.String(), "] - opened")
 	}
 	go func() {
 		defer func() {
-			for sev, cerr := range scerr {
+			for severity, cerr := range scerr {
 				close(cerr)
-				logging.Msg(ctx).Debug("ERRCh - ", sev.String(), " - closed")
+				logging.Msg(ctx).Debug("errs channel [", severity.String(), "] - closed")
 			}
 		}()
 		for err := range cerr {

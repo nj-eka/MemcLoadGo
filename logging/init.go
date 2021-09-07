@@ -3,7 +3,7 @@ package logging
 import (
 	"context"
 	"fmt"
-	cou "github.com/nj-eka/MemcLoadGo/context_utils"
+	cou "github.com/nj-eka/MemcLoadGo/ctxutils"
 	"github.com/nj-eka/MemcLoadGo/errs"
 	"github.com/nj-eka/MemcLoadGo/fh"
 	"github.com/sirupsen/logrus"
@@ -100,7 +100,7 @@ func Initialize(ctx context.Context, logFileName, level, format, traceFileName s
 }
 
 func Finalize() {
-	op := cou.Operation("finilize")
+	op := cou.Operation("log_finalize")
 	if traceFile != nil {
 		trace.Stop()
 		Msg(op).Trace("trace stopped")

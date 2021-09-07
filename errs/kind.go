@@ -16,7 +16,7 @@ const (
 	KindProto                    // proto error
 	KindDBuff                    // dbuffer error
 	KindMemcache                 // memcache error
-	KindInternal                 // Internal error or inconsistency.
+	KindInternal                 // Internal error (for current errs pipeline impl this kind should be last in this list so that len(Kinds) = int(errs.KindInternal))
 )
 
 func (k Kind) String() string {

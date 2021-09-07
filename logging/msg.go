@@ -3,7 +3,7 @@ package logging
 import (
 	"context"
 	"fmt"
-	cou "github.com/nj-eka/MemcLoadGo/context_utils"
+	cou "github.com/nj-eka/MemcLoadGo/ctxutils"
 	"github.com/sirupsen/logrus"
 	"time"
 )

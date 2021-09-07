@@ -1,7 +1,7 @@
 package logging
 
 import (
-	cou "github.com/nj-eka/MemcLoadGo/context_utils"
+	cou "github.com/nj-eka/MemcLoadGo/ctxutils"
 	"github.com/sirupsen/logrus"
 )
 

@@ -8,7 +8,7 @@ import (
 	"github.com/heetch/confita/backend/env"
 	"github.com/heetch/confita/backend/file"
 	"github.com/heetch/confita/backend/flags"
-	cou "github.com/nj-eka/MemcLoadGo/context_utils"
+	cou "github.com/nj-eka/MemcLoadGo/ctxutils"
 	"github.com/nj-eka/MemcLoadGo/errs"
 	errflow "github.com/nj-eka/MemcLoadGo/errsflow"
 	"github.com/nj-eka/MemcLoadGo/fh"
@@ -56,9 +56,9 @@ type Config struct {
 	// logging output file, if empty then os.Stdout
 	LogFile string `config:"log,description=Path to logging output file (empty = os.Stdout)" yaml:"log_file"`
 	// logrus logging levels: panic, fatal, error, warn / warning, info, debug, trace
-	LogLevel string `config:"log_level,short=l,description=Logging level: panic, fatal, error, warn, info, debug, trace" yaml:"log_level"`
+	LogLevel string `config:"log_level,short=l,description=Logging level: panic fatal error warn info debug trace" yaml:"log_level"`
 	// supported logging formats: text, json
-	LogFormat string `config:"log_format,description=Logging format: text, json" yaml:"log_format"`
+	LogFormat string `config:"log_format,description=Logging format: text json" yaml:"log_format"`
 	//// 0.1 trace
 	// Go execution tracer output file (tracing is on if LogLevel == trace)
 	TraceFile string `config:"trace,description=Trace output file (tracing is on if LogLevel == trace)" yaml:"trace_file"`
@@ -131,10 +131,12 @@ var cfg = Config{
 	DQuesSegmentSize:        DefaultDquesSegmentSeize,
 }
 
-var currentUser *user.User
-var inputFiles []string
-var deviceTypes = make(map[workflow.DeviceType]bool)
-var startTime = time.Now()
+var (
+	currentUser *user.User
+	inputFiles  []string
+	deviceTypes = make(map[workflow.DeviceType]bool)
+	startTime   = time.Now()
+)
 
 func init() {
 	ctx := cou.BuildContext(context.Background(), cou.SetContextOperation("00.init"))
@@ -164,7 +166,7 @@ func init() {
 	for deviceType := range cfg.MemcAddrs {
 		deviceTypes[workflow.DeviceType(deviceType)] = true
 	}
-	if err := logging.Initialize(ctx, cfg.LogFile, cfg.LogLevel, cfg.LogFormat, cfg.TraceFile, currentUser); err != nil {
+	if err = logging.Initialize(ctx, cfg.LogFile, cfg.LogLevel, cfg.LogFormat, cfg.TraceFile, currentUser); err != nil {
 		logging.LogError(err)
 		log.Exit(1)
 	}
@@ -180,7 +182,7 @@ func init() {
 		logging.LogError(ctx, errs.SeverityCritical, errs.KindInvalidValue, fmt.Errorf("invalid dbuffer dir [%s]: %w", cfg.DQuesDir, err))
 		log.Exit(1)
 	}
-	if err := os.MkdirAll(cfg.DQuesDir, 0755); err != nil {
+	if err = os.MkdirAll(cfg.DQuesDir, 0755); err != nil {
 		logging.LogError(ctx, errs.SeverityCritical, errs.KindInvalidValue, fmt.Errorf("create dbuffer dir [%s] failed: %w", cfg.DQuesDir, err))
 		log.Exit(1)
 	}
@@ -189,7 +191,7 @@ func init() {
 	logging.Msg(ctx).Debugf("options: %v", string(cfgJson))
 }
 
-var dones []<-chan struct{}
+var doneChs []<-chan struct{}
 
 func allDone(ds []<-chan struct{}) <-chan struct{} {
 	done := make(chan struct{})
@@ -207,7 +209,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	ctx = cou.BuildContext(ctx, cou.SetContextOperation("0.main"))
 	defer func() {
-		<-allDone(append(dones, ctx.Done()))
+		<-allDone(append(doneChs, ctx.Done()))
 	}()
 	logging.Msg(ctx).Debug("start listening for signals")
 	go func() {
@@ -235,10 +237,10 @@ func main() {
 		return
 	}
 	// make error handling flow available
-	errsMonitors := errflow.LaunchErrorHadlers(ctx, cancel, cfg.Verbose, loader.ErrCh(), parser.ErrCh(), dbuf.ErrCh(), saver.ErrCh())
+	errsMonitors := errflow.LaunchErrorHandlers(ctx, cancel, cfg.Verbose, loader.ErrCh(), parser.ErrCh(), dbuf.ErrCh(), saver.ErrCh())
 	// compose processing done
-	dones = append(dones, loader.Done(), parser.Done(), dbuf.Done(), saver.Done(), errsMonitors.Done)
-	finish := allDone(dones)
+	doneChs = append(doneChs, loader.Done(), parser.Done(), dbuf.Done(), saver.Done(), errsMonitors.Done)
+	finish := allDone(doneChs)
 
 	// start processing
 	loader.Run(ctx, inputFiles)
@@ -251,10 +253,10 @@ mainloop:
 		select {
 		case <-ctx.Done():
 			logging.Msg(ctx).Errorf("processing interrupted: %v", ctx.Err())
-			fmt.Println("stopping execution. wait for all processes to complete safely...")
+			fmt.Println("stopping...\nwait for all processes to complete safely")
 			break mainloop
 		case <-finish:
-			logging.Msg(ctx).Debug("processing done")
+			logging.Msg(ctx).Debug("processing - done")
 			break mainloop
 		case <-time.After(1 * time.Second):
 			output.PrintProcessMonitors(startTime, cfg.Verbose, loader.Stats(), parser.Stats(), dbuf.Stats(), saver.Stats(), errsMonitors)

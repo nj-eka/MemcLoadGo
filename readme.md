@@ -3,9 +3,9 @@
 with adding the following features:
 - comprehensive logging;
 - advanced error handling;
-- resilience: no data loss in case of errors;
-- monitoring of app statistics in runtime;
-- resumability (based on durable buffering): application can be gracefully stopped so that the next time app is started, it will continue to work from the point where it was stopped.
+- resilience: no data loss (++/-) in case of errors;
+- monitoring statistics in runtime;
+- resumability: application can be gracefully stopped so that next launch time it will continue to processing data from last stopped point.
 
 
 ### Depends:
@@ -35,15 +35,15 @@ with adding the following features:
     -idfa string
         memc address for 'idfa' device type
     -l string
-        Logging level: panic (short) (default "info")
+        Logging level: panic fatal error warn info debug trace (default "info")
     -loaders int
         Max count of loaders (max number of open input files) (default 1)
     -log string
         Path to logging output file (empty = os.Stdout) (default "MemcLoadGo.log")
     -log_format string
-        Logging format: text (default "text")
+        Logging format: text json (default "text")
     -log_level string
-        Logging level: panic (default "info")
+        Logging level: panic fatal error warn info debug trace (default "info")
     -p string
         Input files pattern (short) (default "./data/appsinstalled/*.tsv.gz")
     -parsers int

@@ -5,7 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
-	cou "github.com/nj-eka/MemcLoadGo/context_utils"
+	cou "github.com/nj-eka/MemcLoadGo/ctxutils"
 	"github.com/nj-eka/MemcLoadGo/errs"
 	"github.com/nj-eka/MemcLoadGo/fh"
 	"github.com/nj-eka/MemcLoadGo/logging"

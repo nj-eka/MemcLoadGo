@@ -2,6 +2,7 @@ package errflow
 
 import (
 	"context"
+	cou "github.com/nj-eka/MemcLoadGo/ctxutils"
 	"github.com/nj-eka/MemcLoadGo/errs"
 	"github.com/nj-eka/MemcLoadGo/logging"
 	"github.com/nj-eka/MemcLoadGo/regs"
@@ -12,7 +13,8 @@ type ErrorsStat struct {
 	Stats regs.Decounter
 }
 
-func LaunchErrorHadlers(ctx context.Context, cancel context.CancelFunc, statsOn bool, errsChs ...<-chan errs.Error) *ErrorsStat {
+func LaunchErrorHandlers(ctx context.Context, cancel context.CancelFunc, statsOn bool, errsChs ...<-chan errs.Error) *ErrorsStat {
+	ctx = cou.BuildContext(ctx, cou.SetContextOperation("_.errs_pipe"))
 	errsCh := MergeErrors(ctx, errsChs...)
 	mscerrs, errsStats := SortFilteredErrors(ctx, errsCh, logging.GetSeveritiesFilter4CurrentLogLevel(), statsOn)
 	errsDone := MapErrorHandlers(

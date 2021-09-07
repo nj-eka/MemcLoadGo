@@ -3,7 +3,7 @@ package errs
 import (
 	"context"
 	"errors"
-	cou "github.com/nj-eka/MemcLoadGo/context_utils"
+	cou "github.com/nj-eka/MemcLoadGo/ctxutils"
 	"time"
 )
 
