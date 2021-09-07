@@ -116,8 +116,8 @@ type Config struct {
 
 var cfg = Config{
 	LogFile:                 DefaultLogFile,
-	LogLevel:                logging.DEFAULT_LEVEL.String(),
-	LogFormat:               logging.DEFAULT_FORMAT,
+	LogLevel:                logging.DefaultLevel.String(),
+	LogFormat:               logging.DefaultFormat,
 	TraceFile:               DefaultTraceFile,
 	Pattern:                 DefaultPattern,
 	MaxLoaders:              DefaultMaxLoaders,

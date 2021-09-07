@@ -10,7 +10,7 @@ import (
 
 func Msg(args ...interface{}) *logrus.Entry {
 	entry := logrus.WithFields(logrus.Fields{
-		"cts":  time.Now().Format(DEFAULT_TIME_FORMAT),
+		"cts":  time.Now().Format(DefaultTimeFormat),
 		"rec":  "msg",
 		"type": "string",
 	})

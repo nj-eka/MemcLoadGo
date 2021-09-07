@@ -28,7 +28,7 @@ func errorFields(err errs.Error) map[string]interface{} {
 	if len(err.StackTrace()) > 0 {
 		fields["frames"] = err.StackTrace()
 	}
-	fields["cts"] = err.TimeStamp().Format(DEFAULT_TIME_FORMAT)
+	fields["cts"] = err.TimeStamp().Format(DefaultTimeFormat)
 	return fields
 }
 

@@ -14,9 +14,9 @@ import (
 	"strings"
 )
 
-const DEFAULT_LEVEL = logrus.InfoLevel
-const DEFAULT_FORMAT = "text"
-const DEFAULT_TIME_FORMAT = "2006/01/02 15:04:05.00000"
+const DefaultLevel = logrus.InfoLevel
+const DefaultFormat = "text"
+const DefaultTimeFormat = "2006/01/02 15:04:05.00000"
 
 var logFile, traceFile *os.File
 
@@ -57,7 +57,7 @@ func Initialize(ctx context.Context, logFileName, level, format, traceFileName s
 					ForceQuote:       false,
 					DisableTimestamp: false,
 					FullTimestamp:    true,
-					TimestampFormat:  DEFAULT_TIME_FORMAT,
+					TimestampFormat:  DefaultTimeFormat,
 					QuoteEmptyFields: true,
 					FieldMap:         fieldMap,
 				},
