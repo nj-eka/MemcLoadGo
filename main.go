@@ -256,7 +256,7 @@ mainloop:
 	for {
 		select {
 		case <-ctx.Done():
-			logging.Msg(ctx).Errorf("processing interrupted: %v", ctx.Err())
+			logging.Msg(ctx).Errorf("processing - interrupted: %v", ctx.Err())
 			fmt.Println("stopping...\nwait for all processes to complete safely")
 			break mainloop
 		case <-finish:
