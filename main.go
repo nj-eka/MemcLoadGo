@@ -242,7 +242,7 @@ func main() {
 	}
 	// make error handling flow available
 	errsMonitors := errflow.LaunchErrorHandlers(ctx, cancel, cfg.Verbose, loader.ErrCh(), parser.ErrCh(), dbuf.ErrCh(), saver.ErrCh())
-	// compose processing done
+	// compose done channels
 	doneChs = append(doneChs, loader.Done(), parser.Done(), dbuf.Done(), saver.Done(), errsMonitors.Done)
 	finish := allDone(doneChs)
 
