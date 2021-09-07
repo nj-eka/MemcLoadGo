@@ -24,24 +24,28 @@ import (
 	"time"
 )
 
-const DefaultPattern = "./data/appsinstalled/*.tsv.gz"
-const DefaultMemcTimeout = 0
-const DefaultDry = true
-const DefaultIgnoreUnknownDeviceType = true
-const DefaultVerbose = false
-const DefaultMemcMaxRetries = 3
-const DefaultDQuesWorkersCount = 2
-const DefaultDquesResume = true
-const DefaultDquesTurbo = false
-const DefaultDquesSegmentSeize = 64 * 1024
+const (
+	DefaultPattern                 = "./data/appsinstalled/*.tsv.gz"
+	DefaultMemcTimeout             = 0
+	DefaultDry                     = true
+	DefaultIgnoreUnknownDeviceType = true
+	DefaultVerbose                 = false
+	DefaultMemcMaxRetries          = 3
+	DefaultDQuesWorkersCount       = 2
+	DefaultDquesResume             = true
+	DefaultDquesTurbo              = false
+	DefaultDquesSegmentSeize       = 64 * 1024
+)
 
-var AppName = filepath.Base(os.Args[0])
-var DefaultConfigFile = "config.yml" // fmt.Sprintf("./%s.yml", AppName)
-var DefaultLogFile = fmt.Sprintf("%s.log", AppName)
-var DefaultTraceFile = fmt.Sprintf("%s.trace.out", AppName)
-var DefaultDquesDir = "data/dques/"
-var DefaultMaxLoaders = 1 // runtime.NumCPU()
-var DefaultMaxParsers = runtime.NumCPU() * 4
+var (
+	AppName           = filepath.Base(os.Args[0])
+	DefaultConfigFile = "config.yml" // fmt.Sprintf("./%s.yml", AppName)
+	DefaultLogFile    = fmt.Sprintf("%s.log", AppName)
+	DefaultTraceFile  = fmt.Sprintf("%s.trace.out", AppName)
+	DefaultDquesDir   = "data/dques/"
+	DefaultMaxLoaders = 1 // runtime.NumCPU()
+	DefaultMaxParsers = runtime.NumCPU() * 4
+)
 
 type MemcacheAddresses struct {
 	IDFA string `config:"idfa,description=memc address for 'idfa' device type"`
