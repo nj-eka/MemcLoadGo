@@ -56,20 +56,20 @@ type MemcacheAddresses struct {
 
 type Config struct {
 	//// 0. logging
-	// ogging file, if empty then os.Stdout
-	LogFile string `config:"log,description=Path to logging file (empty = os.Stdout)" yaml:"log_file"`
+	// Path to log output file; empty = os.Stdout
+	LogFile string `config:"log,description=Path to log output file; empty = os.Stdout" yaml:"log_file"`
 	// logrus logging levels: panic, fatal, error, warn / warning, info, debug, trace
 	LogLevel string `config:"log_level,short=l,description=Logging level: panic fatal error warn info debug trace" yaml:"log_level"`
 	// supported logging formats: text, json
 	LogFormat string `config:"log_format,description=Logging format: text json" yaml:"log_format"`
 	//// 0.1 trace
-	// Go execution tracer file (tracing is on if LogLevel == trace)
-	TraceFile string `config:"trace,description=Trace file; tracing is on if LogLevel = trace; if empty then os.Stderr" yaml:"trace_file"`
+	// Trace file; tracing is on if LogLevel = trace; empty = os.Stderr
+	TraceFile string `config:"trace,description=Trace file; tracing is on if LogLevel = trace; empty = os.Stderr" yaml:"trace_file"`
 
 	//// 1. app data
 	//// 1.0 app mode
-	// Execution mode without modification
-	IsDry bool `config:"dry,description=Execution mode without modification" yaml:"is_dry"`
+	// Run mode without modification
+	IsDry bool `config:"dry,description=Run mode without modification" yaml:"is_dry"`
 	// skip errors for unknown input device type
 	IgnoreUnknownDeviceType bool `config:"unkignore,decription=Skip errors for unknown input device type" yaml:"ignore_unknown"`
 	// 1.1 input
