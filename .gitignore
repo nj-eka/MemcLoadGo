@@ -18,5 +18,5 @@ misc/
 .vscode
 .idea
 tmp
-data/appsinstalled/2017*
+data/
 stats*
