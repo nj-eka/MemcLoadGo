@@ -13,7 +13,7 @@ type ErrorsStat struct {
 	Stats regs.Decounter
 }
 
-func LaunchErrorHandlers(ctx context.Context, cancel context.CancelFunc, statsOn bool, errsChs ...<-chan errs.Error) *ErrorsStat {
+func LaunchErrorHandlers(ctx context.Context, cancel context.CancelFunc, statsOn bool, errsChs ...<-chan errs.Error) (<-chan struct{}, regs.Decounter) {
 	ctx = cu.BuildContext(ctx, cu.SetContextOperation("_.errs_pipe"))
 	errsCh := MergeErrors(ctx, errsChs...)
 	mscerrs, errsStats := SortFilteredErrors(ctx, errsCh, logging.GetSeveritiesFilter4CurrentLogLevel(), statsOn)
@@ -25,8 +25,5 @@ func LaunchErrorHandlers(ctx context.Context, cancel context.CancelFunc, statsOn
 		},
 		LoggingErrorHandler,
 	)
-	return &ErrorsStat{
-		Done:  errsDone,
-		Stats: errsStats,
-	}
+	return errsDone, errsStats
 }

@@ -1,12 +1,16 @@
 package output
 
 import (
+	"bufio"
 	"fmt"
+	cu "github.com/nj-eka/MemcLoadGo/ctxutils"
 	erf "github.com/nj-eka/MemcLoadGo/errsflow"
 	"github.com/nj-eka/MemcLoadGo/fh"
+	"github.com/nj-eka/MemcLoadGo/logging"
 	"github.com/nj-eka/MemcLoadGo/regs"
 	"github.com/nj-eka/MemcLoadGo/workflow"
 	"math"
+	"os"
 	"runtime"
 	"sort"
 	"time"
@@ -32,35 +36,56 @@ func PrintProcessMonitors(
 	dtParserStats *workflow.DeviceTypeParserStats,
 	dtDBufStats *workflow.DeviceTypeDBufferStats,
 	dtSaverStats *workflow.DeviceTypeSaverStats,
-	errs *erf.ErrorsStat,
+	errsStats regs.Decounter,
 ) {
+	ctx := cu.BuildContext(nil, cu.SetContextOperation("print_monitors"))
+	bufOut := bufio.NewWriter(os.Stdout)
+	bout := func(s string){
+		if _, err := bufOut.WriteString(s); err != nil{
+			logging.LogError(ctx, fmt.Sprintf("bufio write string [%s] failed: %w", s, err))
+		}
+	}
 	if verbose {
-		// there may be an inconsistent statistic for intermediate stage (since it is shown at different points in time)
-		// here it's considered acceptable, since the final result will be correct in any case
-		fmt.Println(upLeft)
-		fmt.Println("Time elapsed: ", time.Since(startTime).Round(time.Second))
+		bout(fmt.Sprintln(upLeft))
+		bout(fmt.Sprintln("Time elapsed: ", time.Since(startTime).Round(time.Second)))
+
+		var ms runtime.MemStats
+		runtime.ReadMemStats(&ms)
+		bout(fmt.Sprint(colorCyan, "Mem.usage stats:"))
+		bout(fmt.Sprintf("\tAlloc = %v", fh.BytesToHuman(ms.Alloc)))           // Alloc is bytes of allocated heap objects. HeapAlloc is bytes of allocated heap objects.
+		bout(fmt.Sprintf("\tTotalAlloc = %v", fh.BytesToHuman(ms.TotalAlloc))) // TotalAlloc is cumulative bytes allocated for heap objects.
+		bout(fmt.Sprintf("\tSys = %v", fh.BytesToHuman(ms.Sys)))               // Sys is the total bytes of memory obtained from the OS.
+		bout(fmt.Sprintf("\tMallocs = %v", fh.BytesToHuman(ms.Mallocs)))       // Mallocs is the cumulative count of heap objects allocated.
+		bout(fmt.Sprintf("\tFrees = %v", fh.BytesToHuman(ms.Frees)))           // Frees is the cumulative count of heap objects freed.
+		bout(fmt.Sprintf("\tGCSys = %v", fh.BytesToHuman(ms.GCSys)))           // GCSys is bytes of memory in garbage collection metadata.
+		bout(fmt.Sprintf("\tNumGC = %v\n", ms.NumGC))
+		bout(fmt.Sprint(colorReset))
+
+		// Intermediate stage statistics are inconsistent
+		// since in fact it is calculated at different points in time
+		// However, final result will be correct in any case
 		since := time.Since(loaderStats.StartTime)
 		status := "in progress"
 		if !loaderStats.FinishTime.IsZero() {
 			since = loaderStats.FinishTime.Sub(loaderStats.StartTime)
 			status = "done"
 		}
-		fmt.Print(colorBlue)
-		fmt.Printf("Loader stats (read): %s - %v\n", status, since.Seconds())
+		bout(fmt.Sprint(colorBlue))
+		bout(fmt.Sprintf("Loader stats (read): %s - %v\n", status, since.Seconds()))
 		lines, bytes := loaderStats.ItemsCounter.GetCountScore()
-		fmt.Printf("%8s(lines: %8s/s)", fh.BytesToHuman(uint64(lines)), fh.BytesToHuman(uint64(math.Ceil(float64(lines)/since.Seconds()))))
-		fmt.Printf("%8s(bytes: %8s/s)", fh.BytesToHuman(uint64(bytes)), fh.BytesToHuman(uint64(math.Ceil(float64(bytes)/since.Seconds()))))
-		fmt.Printf("%3d(files)\n", loaderStats.FilesCounter.GetScore())
+		bout(fmt.Sprintf("%8s(lines: %8s/s)", fh.BytesToHuman(uint64(lines)), fh.BytesToHuman(uint64(math.Ceil(float64(lines)/since.Seconds())))))
+		bout(fmt.Sprintf("%8s(bytes: %8s/s)", fh.BytesToHuman(uint64(bytes)), fh.BytesToHuman(uint64(math.Ceil(float64(bytes)/since.Seconds())))))
+		bout(fmt.Sprintf("%3d(files)\n", loaderStats.FilesCounter.GetScore()))
 
-		fmt.Print(colorGreen, "Parser stats (proto):\n")
+		bout(fmt.Sprint(colorGreen, "Parser stats (proto):\n"))
 		for _, deviceType := range workflow.DTParserStats(dtParserStats.DTStats).SortByDeviceType() {
-			fmt.Printf("%8s: %8s(items)", deviceType, fh.BytesToHuman(uint64(dtParserStats.DTStats[deviceType].ItemsCounter().GetScore())))
-			fmt.Printf("%8s(bytes in)", fh.BytesToHuman(uint64(dtParserStats.DTStats[deviceType].InputBytesCounter().GetScore())))
-			fmt.Printf("%8s(bytes out)\n", fh.BytesToHuman(uint64(dtParserStats.DTStats[deviceType].OutputBytesCounter().GetScore())))
+			bout(fmt.Sprintf("%8s: %8s(items)", deviceType, fh.BytesToHuman(uint64(dtParserStats.DTStats[deviceType].ItemsCounter().GetScore()))))
+			bout(fmt.Sprintf("%8s(bytes in)", fh.BytesToHuman(uint64(dtParserStats.DTStats[deviceType].InputBytesCounter().GetScore()))))
+			bout(fmt.Sprintf("%8s(bytes out)\n", fh.BytesToHuman(uint64(dtParserStats.DTStats[deviceType].OutputBytesCounter().GetScore()))))
 		}
 
 		if dtDBufStats != nil {
-			fmt.Print(colorYellow, "DBuffer stats (dque):\n")
+			bout(fmt.Sprint(colorYellow, "DBuffer stats (dque):\n"))
 			for _, deviceType := range workflow.DTBufferStats(dtDBufStats.DTInputStats).SortByDeviceType() {
 				upSince, upStatus := time.Since(dtDBufStats.StartTime), "in progress"
 				if !dtDBufStats.DTInputStats[deviceType].EndTime.IsZero() {
@@ -72,7 +97,7 @@ func PrintProcessMonitors(
 				}
 				inputItems, inputBytes := dtDBufStats.DTInputStats[deviceType].ItemsCounter.GetCountScore()
 				outputItems, outputBytes := dtDBufStats.DTOutputStats[deviceType].ItemsCounter.GetCountScore()
-				fmt.Printf(
+				bout(fmt.Sprintf(
 					"%8s: -> %12s - %6fs / -> %12s - %6fs; %8s/%-8s (items)\t",
 					deviceType,
 					upStatus,
@@ -81,59 +106,42 @@ func PrintProcessMonitors(
 					outSince.Seconds(),
 					fh.BytesToHuman(uint64(inputItems)),
 					fh.BytesToHuman(uint64(outputItems)),
-				)
-				fmt.Printf(
+				))
+				bout(fmt.Sprintf(
 					"%8s/%-8s (bytes)\n",
 					fh.BytesToHuman(uint64(inputBytes)),
 					fh.BytesToHuman(uint64(outputBytes)),
-				)
+				))
 			}
 		}
 
-		fmt.Print(colorPurple, "Saver stats (memc):\n")
+		bout(fmt.Sprint(colorPurple, "Saver stats (memc):\n"))
 		for _, deviceType := range workflow.DTSaverStats(dtSaverStats.DTStats).SortByDeviceType() {
 			items, bytes := dtSaverStats.DTStats[deviceType].ItemsCounter.GetCountScore()
-			fmt.Printf(
+			bout(fmt.Sprintf(
 				"%8s: %8s(items)",
 				deviceType,
 				fh.BytesToHuman(uint64(items)),
-			)
-			fmt.Printf(
+			))
+			bout(fmt.Sprintf(
 				"%8s(bytes)\n",
 				fh.BytesToHuman(uint64(bytes)),
-			)
+			))
 		}
-		//fmt.Print(colorReset)
-		PrintMemUsage()
 	}
-	PrintErrorsStat(errs.Stats)
-}
 
-func PrintMemUsage() {
-	var ms runtime.MemStats
-	runtime.ReadMemStats(&ms)
-	// For info on each, see: https://golang.org/pkg/runtime/#MemStats
-	fmt.Print(colorCyan, "Mem.usage stats:")
-	fmt.Printf("\tAlloc = %v", fh.BytesToHuman(ms.Alloc))           // Alloc is bytes of allocated heap objects. HeapAlloc is bytes of allocated heap objects.
-	fmt.Printf("\tTotalAlloc = %v", fh.BytesToHuman(ms.TotalAlloc)) // TotalAlloc is cumulative bytes allocated for heap objects.
-	fmt.Printf("\tSys = %v", fh.BytesToHuman(ms.Sys))               // Sys is the total bytes of memory obtained from the OS.
-	fmt.Printf("\tMallocs = %v", fh.BytesToHuman(ms.Mallocs))       // Mallocs is the cumulative count of heap objects allocated.
-	fmt.Printf("\tFrees = %v", fh.BytesToHuman(ms.Frees))           // Frees is the cumulative count of heap objects freed.
-	fmt.Printf("\tGCSys = %v", fh.BytesToHuman(ms.GCSys))           // GCSys is bytes of memory in garbage collection metadata.
-	fmt.Printf("\tNumGC = %v\n", ms.NumGC)
-	fmt.Print(colorReset)
-}
+	cp := errsStats.GetCounterPairs()
+	if len(cp) > 0 {
+		bout(fmt.Sprintln(colorRed, "Errors:"))
+		sort.Sort(regs.CounterPairsByKey(cp))
+		for _, cp := range cp {
+			esk := cp.Key.(erf.ErrStatKey)
+			bout(fmt.Sprintf(" *%-8s: %-48s # %4d - %s\n", esk.Severity, esk.Operations, cp.Count, esk.Kind))
+		}
+	}
+	bout(fmt.Sprint(colorReset))
 
-func PrintErrorsStat(es regs.Decounter) {
-	cp := es.GetCounterPairs()
-	if len(cp) == 0 {
-		return
+	if err := bufOut.Flush(); err != nil{
+		logging.LogError(ctx, fmt.Errorf("bufio flush failed: %w", err))
 	}
-	fmt.Println(colorRed, "Errors:")
-	sort.Sort(regs.CounterPairsByKey(cp))
-	for _, cp := range cp {
-		esk := cp.Key.(erf.ErrStatKey)
-		fmt.Printf(" *%-8s: %-48s # %4d - %s\n", esk.Severity, esk.Operations, cp.Count, esk.Kind)
-	}
-	fmt.Print(colorReset)
 }

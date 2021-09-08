@@ -242,9 +242,9 @@ func main() {
 		return
 	}
 	// make error handling flow available
-	errsMonitors := erf.LaunchErrorHandlers(ctx, cancel, cfg.Verbose, loader.ErrCh(), parser.ErrCh(), dbuf.ErrCh(), saver.ErrCh())
+	errsDone, errsStats := erf.LaunchErrorHandlers(ctx, cancel, cfg.Verbose, loader.ErrCh(), parser.ErrCh(), dbuf.ErrCh(), saver.ErrCh())
 	// compose done channels
-	doneChs = append(doneChs, loader.Done(), parser.Done(), dbuf.Done(), saver.Done(), errsMonitors.Done)
+	doneChs = append(doneChs, loader.Done(), parser.Done(), dbuf.Done(), saver.Done(), errsDone)
 	finish := allDone(doneChs)
 
 	// start processing
@@ -264,9 +264,9 @@ mainloop:
 			logging.Msg(ctx).Debug("processing - done")
 			break mainloop
 		case <-time.After(1 * time.Second):
-			output.PrintProcessMonitors(startTime, cfg.Verbose, loader.Stats(), parser.Stats(), dbuf.Stats(), saver.Stats(), errsMonitors)
+			output.PrintProcessMonitors(startTime, cfg.Verbose, loader.Stats(), parser.Stats(), dbuf.Stats(), saver.Stats(), errsStats)
 		}
 	}
 	<-finish
-	output.PrintProcessMonitors(startTime, cfg.Verbose, loader.Stats(), parser.Stats(), dbuf.Stats(), saver.Stats(), errsMonitors)
+	output.PrintProcessMonitors(startTime, cfg.Verbose, loader.Stats(), parser.Stats(), dbuf.Stats(), saver.Stats(), errsStats)
 }
