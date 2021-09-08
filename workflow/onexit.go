@@ -28,10 +28,10 @@ func OnExit(ctx context.Context, cerr chan<- errs.Error, prefixMsg string, withM
 		case <-ctx.Done():
 			cerr <- errs.E(ctx, errs.KindInterrupted, fmt.Errorf("%s - interrupted: %w", prefixMsg, ctx.Err())) // panic on writing to closed channel
 		default:
+			fn()
 			if withMsg {
 				logging.Msg(ctx).Debug(prefixMsg, " - ok")
 			}
 		}
 	}
-	fn()
 }
