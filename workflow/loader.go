@@ -19,33 +19,10 @@ import (
 	"time"
 )
 
-//type LoaderStats interface {
-//	FilesCounter() regs.Counter
-//	ItemsCounter() regs.Counter
-//	StartTime() time.Time
-//	EndTime() time.Time
-//}
-
 type LoaderStats struct {
 	StartTime, FinishTime      time.Time
 	FilesCounter, ItemsCounter regs.Counter
 }
-
-//func (r *loaderStats) StartTime() time.Time {
-//	return r.startTime
-//}
-//
-//func (r *loaderStats) EndTime() time.Time {
-//	return r.endTime
-//}
-//
-//func (r *loaderStats) FilesCounter() regs.Counter {
-//	return r.filesCounter
-//}
-//
-//func (r *loaderStats) ItemsCounter() regs.Counter {
-//	return r.linesCounter
-//}
 
 type Loader interface {
 	ResCh() <-chan string
