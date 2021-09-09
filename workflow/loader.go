@@ -28,7 +28,7 @@ type Loader interface {
 	Run(ctx context.Context) <-chan struct{}
 	ResCh() <-chan string
 	ErrCh() <-chan errs.Error
-	Stats() *LoaderStats
+	Stats() interface{}
 }
 
 type loader struct {
@@ -228,6 +228,6 @@ func (r *loader) ErrCh() <-chan errs.Error {
 	return r.errCh
 }
 
-func (r *loader) Stats() *LoaderStats {
+func (r *loader) Stats() interface{} {
 	return &r.stats
 }

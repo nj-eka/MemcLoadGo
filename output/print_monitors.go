@@ -31,7 +31,7 @@ const (
 
 func PrintProcessMonitors(
 	startTime time.Time,
-	stats ...interface{},
+	statProducers ...workflow.StatProducer,
 ) {
 	ctx := cu.BuildContext(nil, cu.SetContextOperation("print_monitors"))
 	bufOut := bufio.NewWriter(os.Stdout)
@@ -47,8 +47,8 @@ func PrintProcessMonitors(
 		dtSaverStats  *workflow.DeviceTypeSaverStats
 		errsStats     erf.ErrorStats
 	)
-	for _, stat := range stats {
-		switch st := stat.(type) {
+	for _, statProducer := range statProducers {
+		switch st := statProducer.Stats().(type) {
 		case *workflow.LoaderStats:
 			loaderStats = st
 		case *workflow.DeviceTypeParserStats:

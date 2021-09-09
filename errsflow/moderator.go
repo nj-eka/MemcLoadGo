@@ -8,6 +8,10 @@ import (
 	"github.com/nj-eka/MemcLoadGo/regs"
 )
 
+type ErrorProducer interface{
+	ErrCh() <-chan errs.Error
+}
+
 type ErrorStats regs.Decounter
 
 type ErrorModerator interface{
@@ -20,9 +24,9 @@ type errorModerator struct{
 	stats ErrorStats
 }
 
-func NewErrorModerator(ctx context.Context, cancel context.CancelFunc, statsOn bool, errsChs ...<-chan errs.Error) (ErrorModerator, errs.Error){
+func NewErrorModerator(ctx context.Context, cancel context.CancelFunc, statsOn bool, errsProducers ... ErrorProducer) (ErrorModerator, errs.Error){
 	ctx = cu.BuildContext(ctx, cu.SetContextOperation("_.errs_init"))
-	errsCh := MergeErrors(ctx, errsChs...)
+	errsCh := MergeErrors(ctx, errsProducers...)
 	mapSeverity2ErrorCh, totalErrorStats := SortFilteredErrors(ctx, errsCh, logging.GetSeveritiesFilter4CurrentLogLevel(), statsOn)
 	errsDone := MapErrorHandlers(
 		ctx,

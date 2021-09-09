@@ -17,7 +17,7 @@ type DeviceTypeDBuffer interface {
 	Run(context.Context) <-chan struct{}
 	ResChs() map[DeviceType]chan *ProtoUserApps
 	ErrCh() <-chan errs.Error
-	Stats() *DeviceTypeDBufferStats
+	Stats() interface{}
 }
 
 type dbuf struct {
@@ -51,7 +51,7 @@ func (r *dbuf) Dequeue() (*ProtoUserApps, error) {
 
 type deviceTypeDBuffer struct {
 	errCh        chan errs.Error
-	stats        DeviceTypeDBufferStats
+	stats        *DeviceTypeDBufferStats
 
 	dtInputChs map[DeviceType]chan *ProtoUserApps
 	dtOutputChs  map[DeviceType]chan *ProtoUserApps
@@ -108,7 +108,7 @@ func NewDTDBuffer(ctx context.Context, dtInputChs map[DeviceType]chan *ProtoUser
 		dBufs:        dBufs,
 		workersCount: workersCount,
 		errCh:        make(chan errs.Error, len(dtInputChs)*workersCount*8),
-		stats:        stats,
+		stats:        &stats,
 	}, nil
 }
 
@@ -223,8 +223,8 @@ func (r *deviceTypeDBuffer) ErrCh() <-chan errs.Error {
 	return r.errCh
 }
 
-func (r *deviceTypeDBuffer) Stats() *DeviceTypeDBufferStats {
-	return &r.stats
+func (r *deviceTypeDBuffer) Stats() interface{} {
+	return r.stats
 }
 
 func GetWorkerName(deviceType DeviceType, workerNum int) string {

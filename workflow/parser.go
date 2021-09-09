@@ -63,7 +63,7 @@ type Parser interface {
 	Run(ctx context.Context) <-chan struct{}
 	ResChs() map[DeviceType]chan *ProtoUserApps // <-chan *DeviceRecord
 	ErrCh() <-chan errs.Error
-	Stats() *DeviceTypeParserStats
+	Stats() interface{}
 }
 
 type parser struct {
@@ -217,6 +217,6 @@ func (r *parser) ErrCh() <-chan errs.Error {
 	return r.errCh
 }
 
-func (r *parser) Stats() *DeviceTypeParserStats {
+func (r *parser) Stats() interface{} {
 	return &r.stats
 }

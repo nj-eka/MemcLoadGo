@@ -71,7 +71,7 @@ type Config struct {
 	// Run mode without modification
 	IsDry bool `config:"dry,description=Run mode without modification" yaml:"is_dry"`
 	// skip errors for unknown input device type
-	IgnoreUnknownDeviceType bool `config:"unkignore,decription=Skip errors for unknown input device type" yaml:"ignore_unknown"`
+	IgnoreUnknownDeviceType bool `config:"ignore_unknown,decription=Skip errors for unknown input device type" yaml:"ignore_unknown"`
 	// 1.1 input
 	// input files pattern. example: ./data/appsinstalled/h1000*.tsv.gz
 	Pattern string `config:"pattern,short=p,description=Input files pattern" yaml:"pattern"`
@@ -101,7 +101,7 @@ type Config struct {
 	//// 2.2 durable buffering
 	DQuesDir          string `config:"dques,description=Dqueue directory" yaml:"dques_dir"`
 	DQuesWorkersCount int    `config:"buffers,description=Buffers count per device type" yaml:"dques_buffers_count"`
-	DQueResume        bool   `config:"resume,description=Resume from previous sessions" yaml:"dques_resume"`
+	DQueResume        bool   `config:"resume,description=Resumable" yaml:"dques_resume"`
 	DQuesTurbo        bool   `config:"turbo,description=Dqueue turbo mode" yaml:"dques_turbo"`
 	DQuesSegmentSize  int    `config:"segment,description=Items per dqueue segment" yaml:"dques_segment_size"`
 	// 2.3 memcache
@@ -196,28 +196,11 @@ func init() {
 	logging.Msg(ctx).Debugf("options: %v", string(cfgJson))
 }
 
-//var doneChs []<-chan struct{}
-//
-//func allDone(ds []<-chan struct{}) <-chan struct{} {
-//	done := make(chan struct{})
-//	go func() {
-//		for i := 0; i < len(ds); i++ {
-//			<-ds[i]
-//		}
-//		close(done)
-//	}()
-//	return done
-//}
-
 func main() {
 	defer logging.Finalize()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	ctx = cu.BuildContext(ctx, cu.SetContextOperation("0.main"))
 	logging.Msg(ctx).Debug("start listening for signals")
-	//defer func() {
-	//	// wait for finishing all works and ctx.Done()
-	//	<-allDone(append(doneChs, ctx.Done()))
-	//}()
 	go func() {
 		<-ctx.Done()
 		cancel() // stop listening for signed signals asap
@@ -243,15 +226,16 @@ func main() {
 		logging.LogError(err)
 		return
 	}
-	errmoder, err := erf.NewErrorModerator(ctx, cancel, cfg.Verbose, loader.ErrCh(), parser.ErrCh(), dbuf.ErrCh(), saver.ErrCh())
+	errmoder, err := erf.NewErrorModerator(ctx, cancel, cfg.Verbose, loader, parser, dbuf, saver)
 	if err != nil {
 		logging.LogError(err)
 		return
 	}
 
+	pipeline := []wrf.Pipeliner{errmoder, saver, dbuf, parser, loader}
+
 	// launch workflow
-	finish := wrf.Run(ctx, loader, parser, dbuf, saver, errmoder)
-//	doneChs = append(doneChs, finish)
+	finish := wrf.Run(ctx, wrf.Pipelines(pipeline).Runners()...)
 
 mainloop:
 	for {
@@ -265,12 +249,12 @@ mainloop:
 			break mainloop
 		case <-time.After(1 * time.Second):
 			if cfg.Verbose{
-				output.PrintProcessMonitors(startTime, loader.Stats(), parser.Stats(), dbuf.Stats(), saver.Stats(), errmoder.Stats())
+				output.PrintProcessMonitors(startTime, wrf.Pipelines(pipeline).StatProducers()...)
 			}
 		}
 	}
 	<-finish
 	if cfg.Verbose{
-		output.PrintProcessMonitors(startTime, loader.Stats(), parser.Stats(), dbuf.Stats(), saver.Stats(), errmoder.Stats())
+		output.PrintProcessMonitors(startTime, wrf.Pipelines(pipeline).StatProducers()...)
 	}
 }

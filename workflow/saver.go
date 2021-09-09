@@ -25,7 +25,7 @@ type DeviceTypeSaverStats struct {
 type Saver interface {
 	Run(ctx context.Context) <-chan struct{}
 	ErrCh() <-chan errs.Error
-	Stats() *DeviceTypeSaverStats
+	Stats() interface{}
 }
 
 type memcSavers struct {
@@ -178,7 +178,7 @@ func (r *memcSavers) ErrCh() <-chan errs.Error {
 	return r.errCh
 }
 
-func (r *memcSavers) Stats() *DeviceTypeSaverStats {
+func (r *memcSavers) Stats() interface{} {
 	return r.stats
 }
 
