@@ -23,26 +23,25 @@ type DeviceTypeSaverStats struct {
 }
 
 type Saver interface {
+	Run(ctx context.Context) <-chan struct{}
 	ErrCh() <-chan errs.Error
-	Done() <-chan struct{}
-	Run(ctx context.Context, dtInputs map[DeviceType]chan *ProtoUserApps)
 	Stats() *DeviceTypeSaverStats
 }
 
 type memcSavers struct {
-	memcClients  map[DeviceType]*memcache.Client
-	errCh        chan errs.Error
-	done         chan struct{}
-	wg           sync.WaitGroup
+	errCh       chan errs.Error
+	stats       *DeviceTypeSaverStats
+
+	dtInputs    map[DeviceType]chan *ProtoUserApps
+	memcClients map[DeviceType]*memcache.Client
 	dry          bool
 	timeout      time.Duration
 	maxRetries   int
 	retryTimeout time.Duration
-	stats        DeviceTypeSaverStats
 }
 
 // todo: as option - to improve performance 1) add workers per deviceType or/and 2) use memcache connections pool (if client has one ...)
-func NewMemcSaver(ctx context.Context, addrs map[string]string, dry bool, timeout time.Duration, maxRetries int, retryTimeout time.Duration, statsOn bool) (Saver, errs.Error) {
+func NewMemcSaver(ctx context.Context, dtInputs map[DeviceType]chan *ProtoUserApps, addrs map[string]string, dry bool, timeout time.Duration, maxRetries int, retryTimeout time.Duration, statsOn bool) (Saver, errs.Error) {
 	ctx = cu.BuildContext(ctx, cu.SetContextOperation("4.0.memc_saver_init"))
 	memcClients := make(map[DeviceType]*memcache.Client, len(addrs))
 	stats := DeviceTypeSaverStats{DTStats: make(map[DeviceType]*SaverStats, len(addrs)), StartTime: time.Now()}
@@ -63,28 +62,28 @@ func NewMemcSaver(ctx context.Context, addrs map[string]string, dry bool, timeou
 		}
 		logging.Msg(ctx).Debugf("memc client [%s] on addr [%s] set with timeout = [%v] retries = [%d] retry_timeout = [%v]", deviceType, addr, timeout, maxRetries, retryTimeout)
 	}
-	errCh := make(chan errs.Error, len(addrs)*8)
 	return &memcSavers{
+		dtInputs:     dtInputs,
 		memcClients:  memcClients,
-		errCh:        errCh,
-		done:         make(chan struct{}),
+		errCh:        make(chan errs.Error, len(addrs)*4),
 		dry:          dry,
 		timeout:      timeout,
 		maxRetries:   maxRetries,
 		retryTimeout: retryTimeout,
-		stats:        stats,
+		stats:        &stats,
 	}, nil
 }
 
-func (r *memcSavers) Run(ctx context.Context, dtInputs map[DeviceType]chan *ProtoUserApps) {
-	ctx = cu.BuildContext(ctx, cu.SetContextOperation("3.saving"))
+func (r *memcSavers) Run(ctx context.Context) <-chan struct{} {
+	ctx = cu.BuildContext(ctx, cu.SetContextOperation("4.saver"))
+	done := make(chan struct{})
 
 	go func() {
 		ctx = cu.BuildContext(ctx, cu.AddContextOperation("workers"))
-		r.wg.Add(len(r.memcClients))
-		// on exit
-		defer func() {
-			r.wg.Wait()
+		wg := sync.WaitGroup{}
+		wg.Add(len(r.memcClients))
+		defer OnExit(ctx, r.errCh, "workers", true, func(){
+			wg.Wait()
 			r.stats.FinishTime = time.Now()
 			for deviceType, memcClient := range r.memcClients {
 				if err := memcClient.FlushAll(); err != nil {
@@ -97,20 +96,19 @@ func (r *memcSavers) Run(ctx context.Context, dtInputs map[DeviceType]chan *Prot
 				}
 			}
 			close(r.errCh)
-			close(r.done)
-			logging.Msg(ctx).Debug("saver stopped:", ctx.Err())
-		}()
+			close(done)
+		})
 		for deviceType := range r.memcClients {
 
 			go func(ctx context.Context, deviceType DeviceType) {
 				ctx = cu.BuildContext(ctx, cu.AddContextOperation(cu.Operation(fmt.Sprintf("mc-%s", deviceType))))
 				logging.Msg(ctx).Debugf("memc [%s] - started", deviceType)
-				defer OnExit(ctx, r.errCh, fmt.Sprintf("memc [%s]", deviceType), true,
+				defer OnExit(ctx, r.errCh, fmt.Sprintf("mc-%s", deviceType), true,
 					func() {
-						r.wg.Done()
+						wg.Done()
 					})
 				mc := r.memcClients[deviceType]
-				inputs := dtInputs[deviceType]
+				inputs := r.dtInputs[deviceType]
 				sts := r.stats.DTStats[deviceType]
 				for {
 					//select {
@@ -165,20 +163,23 @@ func (r *memcSavers) Run(ctx context.Context, dtInputs map[DeviceType]chan *Prot
 					}
 				}
 			}(ctx, deviceType)
+
 		}
 	}()
+
+	return done
 }
+
+
+
+
 
 func (r *memcSavers) ErrCh() <-chan errs.Error {
 	return r.errCh
 }
 
-func (r *memcSavers) Done() <-chan struct{} {
-	return r.done
-}
-
 func (r *memcSavers) Stats() *DeviceTypeSaverStats {
-	return &r.stats
+	return r.stats
 }
 
 type DTSaverStats map[DeviceType]*SaverStats

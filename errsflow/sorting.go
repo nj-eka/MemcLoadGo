@@ -8,10 +8,10 @@ import (
 	"github.com/nj-eka/MemcLoadGo/regs"
 )
 
-func SortFilteredErrors(ctx context.Context, cerr <-chan errs.Error, filterSeverities []errs.Severity, statsOn bool) (map[errs.Severity]chan errs.Error, regs.Decounter) {
+func SortFilteredErrors(ctx context.Context, cerr <-chan errs.Error, filterSeverities []errs.Severity, statsOn bool) (map[errs.Severity]chan errs.Error, ErrorStats) {
 	ctx = cu.BuildContext(ctx, cu.AddContextOperation("b.sort"))
 	scerr := make(map[errs.Severity]chan errs.Error)
-	stats := regs.NewDecounter(len(errs.AllSeverities)*int(errs.KindInternal)*64, statsOn)
+	stats := ErrorStats(regs.NewDecounter(len(errs.AllSeverities)*int(errs.KindInternal)*64, statsOn))
 	for _, severity := range filterSeverities {
 		scerr[severity] = make(chan errs.Error, cap(cerr))
 		logging.Msg(ctx).Debug("errs channel [", severity.String(), "] - opened")

@@ -14,10 +14,9 @@ import (
 )
 
 type DeviceTypeDBuffer interface {
-	Run(context.Context, map[DeviceType]chan *ProtoUserApps)
+	Run(context.Context) <-chan struct{}
 	ResChs() map[DeviceType]chan *ProtoUserApps
 	ErrCh() <-chan errs.Error
-	Done() <-chan struct{}
 	Stats() *DeviceTypeDBufferStats
 }
 
@@ -51,127 +50,14 @@ func (r *dbuf) Dequeue() (*ProtoUserApps, error) {
 }
 
 type deviceTypeDBuffer struct {
+	errCh        chan errs.Error
+	stats        DeviceTypeDBufferStats
+
+	dtInputChs map[DeviceType]chan *ProtoUserApps
 	dtOutputChs  map[DeviceType]chan *ProtoUserApps
+
 	workersCount int
 	dBufs        map[string]*dbuf
-	errCh        chan errs.Error
-	done         chan struct{}
-	stats        DeviceTypeDBufferStats
-}
-
-func (r *deviceTypeDBuffer) Run(ctx context.Context, dtInputChs map[DeviceType]chan *ProtoUserApps) {
-	ctx = cu.BuildContext(ctx, cu.SetContextOperation("3.dbuf"))
-	// keys of map[DeviceType]chan *ProtoUserApps == keys of deviceTypes map[DeviceType]bool
-	var wg sync.WaitGroup
-	wg.Add(len(dtInputChs) + len(r.dBufs)) // should be == 2 * len(deviceTypes)
-	r.stats.StartTime = time.Now()
-
-	go func() {
-		wg.Wait()
-		close(r.errCh)
-		close(r.done)
-		logging.Msg(ctx).Debugf("Durable buffering stopped")
-	}()
-
-	// -> buffer
-	for deviceType, inputCh := range dtInputChs {
-		for workerNum := 0; workerNum < r.workersCount; workerNum++ {
-			workerName := GetWorkerName(deviceType, workerNum)
-
-			go func(ctx context.Context, wg *sync.WaitGroup, workerName string, inputCh <-chan *ProtoUserApps, dBuf *dbuf, stats *DBufferStats) {
-				ctx = cu.BuildContext(ctx, cu.AddContextOperation(cu.Operation(fmt.Sprintf("enqueue %s", workerName))))
-				logging.Msg(ctx).Debugf("start pumping into [%s]", workerName)
-				defer func() {
-					stats.EndTime = time.Now()
-					close(dBuf.inputDone)
-					wg.Done()
-					logging.Msg(ctx).Debugf("stop pumping into [%s]: %d / %d", workerName, stats.ItemsCounter.GetCount(), stats.ItemsCounter.GetScore())
-				}()
-				for protoUserApps := range inputCh {
-					if err := dBuf.Enqueue(protoUserApps); err == nil {
-						stats.ItemsCounter.Add(protoUserApps.Size())
-					} else {
-						// todo: add err handler for error with {errs.SeverityCritical, errs.KindDBuff} than calls cancel() on ctx to stop processing (data loss!)
-						r.errCh <- errs.E(ctx, errs.SeverityCritical, errs.KindDBuff, fmt.Errorf("enqueue to dbuf [%s] failed on item [%v] with err: %w", workerName, protoUserApps, err))
-					}
-					//runtime.Gosched() // todo: maybe not so often ...
-				}
-			}(ctx, &wg, workerName, inputCh, r.dBufs[workerName], r.stats.DTInputStats[workerName])
-
-		}
-	}
-
-	// buffer ->
-	for deviceType := range dtInputChs {
-		for workerNum := 0; workerNum < r.workersCount; workerNum++ {
-			workerName := GetWorkerName(deviceType, workerNum)
-
-			go func(ctx context.Context, wg *sync.WaitGroup, workerName string, outputCh chan<- *ProtoUserApps, dBuf *dbuf, stats *DBufferStats) {
-				ctx = cu.BuildContext(ctx, cu.AddContextOperation(cu.Operation(fmt.Sprintf("dequeue %s", workerName))))
-				logging.Msg(ctx).Debugf("start pumping out from [%s]", workerName)
-				defer OnExit(ctx, r.errCh, fmt.Sprintf("pumping out from [%s]", workerName), true, func() {
-					stats.EndTime = time.Now()
-					if dBuf.que.Turbo() {
-						err := dBuf.que.TurboSync()
-						logging.Msg(ctx).Debugf("dbuf que [%s] turbo sync - done: %v", workerName, err)
-					}
-					err := dBuf.que.Close()
-					logging.Msg(ctx).Debugf("dbuf que [%s] - closed: %v", workerName, err)
-					close(outputCh)
-					wg.Done()
-					logging.Msg(ctx).Debugf("stop pumping out from [%s]: %d(%d)", workerName, stats.ItemsCounter.GetCount(), stats.ItemsCounter.GetScore())
-				})
-				for {
-					select {
-					case <-ctx.Done():
-						return
-					default:
-					}
-					if item, err := dBuf.Dequeue(); err == nil {
-						// below it is assumed that receiver is reading everything from channel,
-						// otherwise todo: add timeout and return received record back to buffer
-						outputCh <- item
-						stats.ItemsCounter.Add(item.Size())
-						// runtime.Gosched()
-					} else {
-						switch err {
-						case dque.ErrQueueClosed:
-							return
-						case dque.ErrEmpty:
-							select {
-							case <-dBuf.inputDone:
-								return
-							default:
-							}
-							time.Sleep(10 * time.Millisecond) // todo: add const to config
-							continue
-						default:
-							r.errCh <- errs.E(ctx, errs.KindDBuff, fmt.Errorf("dequeue to dbuf [%s] failed: %w", deviceType, err))
-							// todo: try to enqueue dequeued item back ...
-							return
-						}
-					}
-				}
-			}(ctx, &wg, workerName, r.dtOutputChs[deviceType], r.dBufs[workerName], r.stats.DTOutputStats[workerName])
-
-		}
-	}
-}
-
-func (r *deviceTypeDBuffer) ResChs() map[DeviceType]chan *ProtoUserApps {
-	return r.dtOutputChs
-}
-
-func (r *deviceTypeDBuffer) ErrCh() <-chan errs.Error {
-	return r.errCh
-}
-
-func (r *deviceTypeDBuffer) Done() <-chan struct{} {
-	return r.done
-}
-
-func (r *deviceTypeDBuffer) Stats() *DeviceTypeDBufferStats {
-	return &r.stats
 }
 
 func NewDTDBuffer(ctx context.Context, dtInputChs map[DeviceType]chan *ProtoUserApps, workersCount int, dirPath string, itemsPerSegment int, resume bool, turbo bool, statsOn bool) (DeviceTypeDBuffer, error) {
@@ -215,16 +101,130 @@ func NewDTDBuffer(ctx context.Context, dtInputChs map[DeviceType]chan *ProtoUser
 		}
 		outputChs[deviceType] = make(chan *ProtoUserApps, cap(inputCh))
 	}
-	done := make(chan struct{})
 
 	return &deviceTypeDBuffer{
+		dtInputChs: dtInputChs,
 		dtOutputChs:  outputChs,
 		dBufs:        dBufs,
 		workersCount: workersCount,
 		errCh:        make(chan errs.Error, len(dtInputChs)*workersCount*8),
-		done:         done,
 		stats:        stats,
 	}, nil
+}
+
+func (r *deviceTypeDBuffer) Run(ctx context.Context) <-chan struct{}  {
+	ctx = cu.BuildContext(ctx, cu.SetContextOperation("3.dbuf"))
+	done := make(chan struct{})
+
+	go func(){
+		ctx = cu.BuildContext(ctx, cu.AddContextOperation("workers"))
+		var wg sync.WaitGroup
+		wg.Add(2 * len(r.dtInputChs) * r.workersCount)
+		r.stats.StartTime = time.Now()
+		defer OnExit(ctx, r.errCh, "workers", true, func(){
+			wg.Wait()
+			for _, outputCh := range r.dtOutputChs{
+				close(outputCh)
+			}
+			close(r.errCh)
+			close(done)
+		})
+
+		// -> buffer
+		for deviceType, inputCh := range r.dtInputChs {
+			for workerNum := 0; workerNum < r.workersCount; workerNum++ {
+				workerName := GetWorkerName(deviceType, workerNum)
+
+				go func(ctx context.Context, wg *sync.WaitGroup, workerName string, inputCh <-chan *ProtoUserApps, dBuf *dbuf, stats *DBufferStats) {
+					ctx = cu.BuildContext(ctx, cu.AddContextOperation(cu.Operation(fmt.Sprintf("enqueue %s", workerName))))
+					logging.Msg(ctx).Debugf("start pumping into [%s]", workerName)
+					defer func() {
+						stats.EndTime = time.Now()
+						close(dBuf.inputDone)
+						wg.Done()
+						logging.Msg(ctx).Debugf("stop pumping into [%s]: %d / %d", workerName, stats.ItemsCounter.GetCount(), stats.ItemsCounter.GetScore())
+					}()
+					for protoUserApps := range inputCh {
+						if err := dBuf.Enqueue(protoUserApps); err == nil {
+							stats.ItemsCounter.Add(protoUserApps.Size())
+						} else {
+							// todo: add err handler for error with {errs.SeverityCritical, errs.KindDBuff} than calls cancel() on ctx to stop processing (data loss!)
+							r.errCh <- errs.E(ctx, errs.SeverityCritical, errs.KindDBuff, fmt.Errorf("enqueue to dbuf [%s] failed on item [%v] with err: %w", workerName, protoUserApps, err))
+						}
+						//runtime.Gosched() // todo: maybe not so often ...
+					}
+				}(ctx, &wg, workerName, inputCh, r.dBufs[workerName], r.stats.DTInputStats[workerName])
+			}
+		}
+
+		// buffer ->
+		for deviceType := range r.dtInputChs {
+			for workerNum := 0; workerNum < r.workersCount; workerNum++ {
+				workerName := GetWorkerName(deviceType, workerNum)
+
+				go func(ctx context.Context, wg *sync.WaitGroup, workerName string, outputCh chan<- *ProtoUserApps, dBuf *dbuf, stats *DBufferStats) {
+					ctx = cu.BuildContext(ctx, cu.AddContextOperation(cu.Operation(fmt.Sprintf("dequeue %s", workerName))))
+					logging.Msg(ctx).Debugf("start pumping out from [%s]", workerName)
+					defer OnExit(ctx, r.errCh, fmt.Sprintf("pumping out from [%s]", workerName), true, func() {
+						stats.EndTime = time.Now()
+						if dBuf.que.Turbo() {
+							err := dBuf.que.TurboSync()
+							logging.Msg(ctx).Debugf("dbuf que [%s] turbo sync - done: %v", workerName, err)
+						}
+						err := dBuf.que.Close()
+						logging.Msg(ctx).Debugf("dbuf que [%s] - closed: %v", workerName, err)
+						wg.Done()
+						logging.Msg(ctx).Debugf("stop pumping out from [%s]: %d(%d)", workerName, stats.ItemsCounter.GetCount(), stats.ItemsCounter.GetScore())
+					})
+					for {
+						select {
+						case <-ctx.Done():
+							return
+						default:
+						}
+						if item, err := dBuf.Dequeue(); err == nil {
+							// below it is assumed that receiver is reading everything from channel,
+							// otherwise todo: add timeout and return received record back to buffer
+							outputCh <- item
+							stats.ItemsCounter.Add(item.Size())
+							// runtime.Gosched()
+						} else {
+							switch err {
+							case dque.ErrQueueClosed:
+								return
+							case dque.ErrEmpty:
+								select {
+								case <-dBuf.inputDone:
+									return
+								default:
+								}
+								time.Sleep(10 * time.Millisecond) // todo: add const to config
+								continue
+							default:
+								r.errCh <- errs.E(ctx, errs.KindDBuff, fmt.Errorf("dequeue to dbuf [%s] failed: %w", deviceType, err))
+								// todo: try to enqueue dequeued item back ...
+								return
+							}
+						}
+					}
+				}(ctx, &wg, workerName, r.dtOutputChs[deviceType], r.dBufs[workerName], r.stats.DTOutputStats[workerName])
+			}
+		}
+	}()
+
+	return done
+}
+
+func (r *deviceTypeDBuffer) ResChs() map[DeviceType]chan *ProtoUserApps {
+	return r.dtOutputChs
+}
+
+func (r *deviceTypeDBuffer) ErrCh() <-chan errs.Error {
+	return r.errCh
+}
+
+func (r *deviceTypeDBuffer) Stats() *DeviceTypeDBufferStats {
+	return &r.stats
 }
 
 func GetWorkerName(deviceType DeviceType, workerNum int) string {

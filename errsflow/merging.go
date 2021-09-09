@@ -40,7 +40,7 @@ func MergeErrors(ctx context.Context, cerrs ...<-chan errs.Error) <-chan errs.Er
 	go func() {
 		wg.Wait()
 		close(cout)
-		logging.Msg(ctx).Info("main errs channel - closed")
+		logging.Msg(ctx).Info("errs merged channel - closed")
 	}()
 	return cout
 }

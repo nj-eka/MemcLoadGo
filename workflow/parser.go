@@ -60,42 +60,23 @@ func (r *parserStats) OutputBytesCounter() regs.Counter {
 }
 
 type Parser interface {
+	Run(ctx context.Context) <-chan struct{}
 	ResChs() map[DeviceType]chan *ProtoUserApps // <-chan *DeviceRecord
 	ErrCh() <-chan errs.Error
-	Done() <-chan struct{}
-	Run(ctx context.Context, inputCh <-chan string)
 	Stats() *DeviceTypeParserStats
 }
 
 type parser struct {
-	maxWorkers              int
 	resChs                  map[DeviceType]chan *ProtoUserApps
 	errCh                   chan errs.Error
-	ignoreUnknownDeviceType bool
-	isDone                  bool
-	done                    chan struct{}
-	wg                      sync.WaitGroup
-	wp                      chan struct{}
 	stats                   DeviceTypeParserStats
+
+	inputCh <-chan string
+	maxWorkers              int
+	ignoreUnknownDeviceType bool
 }
 
-func (r *parser) ResChs() map[DeviceType]chan *ProtoUserApps {
-	return r.resChs
-}
-
-func (r *parser) ErrCh() <-chan errs.Error {
-	return r.errCh
-}
-
-func (r *parser) Done() <-chan struct{} {
-	return r.done
-}
-
-func (r *parser) Stats() *DeviceTypeParserStats {
-	return &r.stats
-}
-
-func NewParser(ctx context.Context, maxWorkers int, deviceTypes map[DeviceType]bool, ignoreUnknownDeviceType bool, statsOn bool) Parser {
+func NewParser(ctx context.Context, inputCh <-chan string, maxWorkers int, deviceTypes map[DeviceType]bool, ignoreUnknownDeviceType bool, statsOn bool) Parser {
 	ctx = cu.BuildContext(ctx, cu.SetContextOperation("2.0.parser_init"))
 	resChs := make(map[DeviceType]chan *ProtoUserApps, len(deviceTypes))
 	dtStats := DeviceTypeParserStats{DTStats: make(map[DeviceType]ParserStats, len(deviceTypes))}
@@ -108,46 +89,52 @@ func NewParser(ctx context.Context, maxWorkers int, deviceTypes map[DeviceType]b
 		}
 	}
 	return &parser{
+		inputCh: inputCh,
 		maxWorkers:              maxWorkers,
-		done:                    make(chan struct{}),
-		wp:                      make(chan struct{}, maxWorkers),
 		resChs:                  resChs,
-		errCh:                   make(chan errs.Error, maxWorkers*8),
+		errCh:                   make(chan errs.Error, maxWorkers * 4),
 		ignoreUnknownDeviceType: ignoreUnknownDeviceType,
 		stats:                   dtStats,
 	}
 }
 
-func (r *parser) Run(ctx context.Context, inputCh <-chan string) {
-	ctx = cu.BuildContext(ctx, cu.SetContextOperation("2.parser"))
+func (r *parser) Run(ctx context.Context) <-chan struct{} {
+	ctx = cu.BuildContext(ctx, cu.SetContextOperation("2.parser_run"))
 	r.stats.StartTime = time.Now()
+	done := make(chan struct{})
 
-	go func(ctx context.Context) {
-		ctx = cu.BuildContext(ctx, cu.AddContextOperation("wp"))
-		defer OnExit(ctx, r.errCh, "parsing workers", true,
+	go func() {
+		ctx = cu.BuildContext(ctx, cu.AddContextOperation("workers"))
+		wg :=                      sync.WaitGroup{}
+		wp := make(chan struct{}, r.maxWorkers)
+
+
+		defer OnExit(ctx, r.errCh, "workers", true,
 			func() {
-				r.wg.Wait()
+				wg.Wait()
 				r.stats.EndTime = time.Now()
-				close(r.wp)
+				close(wp)
 				for deviceType, resCh := range r.resChs {
 					close(resCh)
 					logging.Msg(ctx).Debug("parser channel [%s] - closed", deviceType)
 				}
 				close(r.errCh)
-				close(r.done)
+				close(done)
 			})
 		// ctx.Done() is ignored here for not to lose data written to inputCh. exit after input channel is closed and all received tasks/lines done/processed
-		for line := range inputCh {
-			r.wp <- struct{}{}
-			r.wg.Add(1)
-			go processInputString(ctx, &r.wg, r.wp, line, r.resChs, r.errCh, r.ignoreUnknownDeviceType, r.stats)
+		for line := range r.inputCh {
+			wp <- struct{}{}
+			wg.Add(1)
+			go processInputString(ctx, &wg, wp, line, r.resChs, r.errCh, r.ignoreUnknownDeviceType, r.stats)
 		}
-	}(ctx)
+	}()
+
+	return done
 }
 
 func processInputString(ctx context.Context, wg *sync.WaitGroup, wp <-chan struct{}, inputString string, resChs map[DeviceType]chan *ProtoUserApps, errCh chan<- errs.Error, ignoreUnknownDeviceType bool, sts DeviceTypeParserStats) {
-	ctx = cu.BuildContext(ctx, cu.AddContextOperation("processInputString"))
-	defer OnExit(ctx, errCh, fmt.Sprintf("parsing input string [%s]", inputString), false,
+	ctx = cu.BuildContext(ctx, cu.AddContextOperation("parsing"))
+	defer OnExit(ctx, errCh, "", false,
 		func() {
 			<-wp
 			wg.Done()
@@ -222,15 +209,14 @@ func (m DTParserStats) SortByDeviceType() []DeviceType {
 	return keys
 }
 
-// type DTPUA map[DeviceType]chan *ProtoUserApps
-//
-//func (m DTPUA) SortByDeviceType() []DeviceType{
-//	keys := make([]DeviceType, 0, len(m))
-//	for key := range m{
-//		keys = append(keys, key)
-//	}
-//	sort.SliceStable(keys, func(i, j int) bool{
-//		return keys[i] < keys[j]
-//	})
-//	return keys
-//}
+func (r *parser) ResChs() map[DeviceType]chan *ProtoUserApps {
+	return r.resChs
+}
+
+func (r *parser) ErrCh() <-chan errs.Error {
+	return r.errCh
+}
+
+func (r *parser) Stats() *DeviceTypeParserStats {
+	return &r.stats
+}

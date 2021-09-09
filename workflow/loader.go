@@ -25,49 +25,30 @@ type LoaderStats struct {
 }
 
 type Loader interface {
+	Run(ctx context.Context) <-chan struct{}
 	ResCh() <-chan string
 	ErrCh() <-chan errs.Error
-	Done() <-chan struct{}
-	Run(ctx context.Context, filePaths []string)
 	Stats() *LoaderStats
 }
 
 type loader struct {
+	resCh      chan string
+	errCh      chan errs.Error
+	stats      LoaderStats
+
+	filePaths []string
 	maxWorkers int
 	usr        *user.User
 	dry        bool
-	resCh      chan string
-	errCh      chan errs.Error
-	done       chan struct{}
-	wg         sync.WaitGroup
-	wp         chan struct{}
-	stats      LoaderStats
 }
 
-func (r *loader) ResCh() <-chan string {
-	return r.resCh
-}
-
-func (r *loader) ErrCh() <-chan errs.Error {
-	return r.errCh
-}
-
-func (r *loader) Done() <-chan struct{} {
-	return r.done
-}
-
-func (r *loader) Stats() *LoaderStats {
-	return &r.stats
-}
-
-func NewLoader(ctx context.Context, maxWorkers int, usr *user.User, dry bool, statsOn bool) Loader {
+func NewLoader(ctx context.Context, filePaths []string, maxWorkers int, usr *user.User, dry bool, statsOn bool) Loader {
 	ctx = cu.BuildContext(ctx, cu.SetContextOperation("1.0.loader_init"))
 	return &loader{
+		filePaths: filePaths,
 		maxWorkers: maxWorkers,
 		usr:        usr,
 		dry:        dry,
-		done:       make(chan struct{}),
-		wp:         make(chan struct{}, maxWorkers),
 		resCh:      make(chan string, maxWorkers),
 		errCh:      make(chan errs.Error, maxWorkers*8),
 		stats: LoaderStats{
@@ -77,19 +58,20 @@ func NewLoader(ctx context.Context, maxWorkers int, usr *user.User, dry bool, st
 	}
 }
 
-func (r *loader) Run(ctx context.Context, filePaths []string) {
+func (r *loader) Run(ctx context.Context) <-chan struct{} {
 	ctx = cu.BuildContext(ctx, cu.SetContextOperation("1.loader"))
+	done := make(chan struct{})
+
 	r.stats.StartTime = time.Now()
 	source := make(chan string)
 
 	go func(ctx context.Context) {
 		ctx = cu.BuildContext(ctx, cu.AddContextOperation("iter_sources"))
-		defer OnExit(ctx, r.errCh, "sources iteration", true,
+		defer OnExit(ctx, r.errCh, "iter_sources", true,
 			func() {
 				close(source)
-				logging.Msg(ctx).Debug("sources channel closed")
 			})
-		for _, filePath := range filePaths {
+		for _, filePath := range r.filePaths {
 			if fullFilePath, err := fh.ResolvePath(filePath, r.usr); err != nil {
 				r.errCh <- errs.E(ctx, errs.KindInvalidValue, fmt.Errorf("resolving file [%s] failed: %w", filePath, err))
 			} else {
@@ -103,18 +85,21 @@ func (r *loader) Run(ctx context.Context, filePaths []string) {
 	}(ctx)
 
 	go func(ctx context.Context) {
-		ctx = cu.BuildContext(ctx, cu.AddContextOperation("wp"))
-		defer OnExit(ctx, r.errCh, "loading workers", true,
+		ctx = cu.BuildContext(ctx, cu.AddContextOperation("workers"))
+		wg := sync.WaitGroup{}
+		wp := make(chan struct{}, r.maxWorkers)
+
+		defer OnExit(ctx, r.errCh, "workers", true,
 			func() {
 				// wait for graceful closing all open files
 				// with saving unprocessed data in current session
 				// for next start from current position
-				r.wg.Wait()
+				wg.Wait()
 				r.stats.FinishTime = time.Now()
-				close(r.wp)
+				close(wp)
 				close(r.resCh)
 				close(r.errCh)
-				close(r.done)
+				close(done)
 			})
 		for {
 			select {
@@ -127,13 +112,15 @@ func (r *loader) Run(ctx context.Context, filePaths []string) {
 				select {
 				case <-ctx.Done():
 					return
-				case r.wp <- struct{}{}:
-					r.wg.Add(1)
-					go processFile(ctx, &r.wg, r.wp, filePath, r.resCh, r.errCh, &r.stats, r.dry)
+				case wp <- struct{}{}:
+					wg.Add(1)
+					go processFile(ctx, &wg, wp, filePath, r.resCh, r.errCh, &r.stats, r.dry)
 				}
 			}
 		}
 	}(ctx)
+
+	return done
 }
 
 func processFile(ctx context.Context, wg *sync.WaitGroup, wp <-chan struct{}, filePath string, resCh chan<- string, errCh chan<- errs.Error, sts *LoaderStats, dry bool) {
@@ -231,4 +218,16 @@ func processFile(ctx context.Context, wg *sync.WaitGroup, wp <-chan struct{}, fi
 	} else {
 		errCh <- errs.E(ctx, errs.KindOpenFile, fmt.Errorf("< open [%s] failed: %w", filePath, err))
 	}
+}
+
+func (r *loader) ResCh() <-chan string {
+	return r.resCh
+}
+
+func (r *loader) ErrCh() <-chan errs.Error {
+	return r.errCh
+}
+
+func (r *loader) Stats() *LoaderStats {
+	return &r.stats
 }

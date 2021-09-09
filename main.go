@@ -196,27 +196,28 @@ func init() {
 	logging.Msg(ctx).Debugf("options: %v", string(cfgJson))
 }
 
-var doneChs []<-chan struct{}
-
-func allDone(ds []<-chan struct{}) <-chan struct{} {
-	done := make(chan struct{})
-	go func() {
-		for i := 0; i < len(ds); i++ {
-			<-ds[i]
-		}
-		close(done)
-	}()
-	return done
-}
+//var doneChs []<-chan struct{}
+//
+//func allDone(ds []<-chan struct{}) <-chan struct{} {
+//	done := make(chan struct{})
+//	go func() {
+//		for i := 0; i < len(ds); i++ {
+//			<-ds[i]
+//		}
+//		close(done)
+//	}()
+//	return done
+//}
 
 func main() {
 	defer logging.Finalize()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	ctx = cu.BuildContext(ctx, cu.SetContextOperation("0.main"))
-	defer func() {
-		<-allDone(append(doneChs, ctx.Done()))
-	}()
 	logging.Msg(ctx).Debug("start listening for signals")
+	//defer func() {
+	//	// wait for finishing all works and ctx.Done()
+	//	<-allDone(append(doneChs, ctx.Done()))
+	//}()
 	go func() {
 		<-ctx.Done()
 		cancel() // stop listening for signed signals asap
@@ -228,30 +229,29 @@ func main() {
 		logging.LogError(ctx, errs.SeverityError, fmt.Errorf("no files found for pattern %s", cfg.Pattern))
 		return
 	}
-	// workflow init
-	loader := wrf.NewLoader(ctx, cfg.MaxLoaders, currentUser, cfg.IsDry, cfg.Verbose)
-	parser := wrf.NewParser(ctx, cfg.MaxParsers, deviceTypes, cfg.IgnoreUnknownDeviceType, cfg.Verbose)
+
+	// init workflow
+	loader := wrf.NewLoader(ctx, inputFiles, cfg.MaxLoaders, currentUser, cfg.IsDry, cfg.Verbose)
+	parser := wrf.NewParser(ctx, loader.ResCh(), cfg.MaxParsers, deviceTypes, cfg.IgnoreUnknownDeviceType, cfg.Verbose)
 	dbuf, err := wrf.NewDTDBuffer(ctx, parser.ResChs(), cfg.DQuesWorkersCount, cfg.DQuesDir, cfg.DQuesSegmentSize, cfg.DQueResume, cfg.DQuesTurbo, cfg.Verbose)
 	if err != nil {
 		logging.LogError(err)
 		return
 	}
-	saver, err := wrf.NewMemcSaver(ctx, cfg.MemcAddrs, cfg.IsDry, cfg.MemcTimeout, cfg.MemcMaxRetries, cfg.MemcRetryTimeout, cfg.Verbose)
+	saver, err := wrf.NewMemcSaver(ctx, dbuf.ResChs(), cfg.MemcAddrs, cfg.IsDry, cfg.MemcTimeout, cfg.MemcMaxRetries, cfg.MemcRetryTimeout, cfg.Verbose)
 	if err != nil {
 		logging.LogError(err)
 		return
 	}
-	// make error handling flow available
-	errsDone, errsStats := erf.LaunchErrorHandlers(ctx, cancel, cfg.Verbose, loader.ErrCh(), parser.ErrCh(), dbuf.ErrCh(), saver.ErrCh())
-	// compose done channels
-	doneChs = append(doneChs, loader.Done(), parser.Done(), dbuf.Done(), saver.Done(), errsDone)
-	finish := allDone(doneChs)
+	errmoder, err := erf.NewErrorModerator(ctx, cancel, cfg.Verbose, loader.ErrCh(), parser.ErrCh(), dbuf.ErrCh(), saver.ErrCh())
+	if err != nil {
+		logging.LogError(err)
+		return
+	}
 
-	// start processing
-	loader.Run(ctx, inputFiles)
-	parser.Run(ctx, loader.ResCh())
-	dbuf.Run(ctx, parser.ResChs())
-	saver.Run(ctx, dbuf.ResChs())
+	// launch workflow
+	finish := wrf.Run(ctx, loader, parser, dbuf, saver, errmoder)
+//	doneChs = append(doneChs, finish)
 
 mainloop:
 	for {
@@ -264,9 +264,13 @@ mainloop:
 			logging.Msg(ctx).Debug("processing - done")
 			break mainloop
 		case <-time.After(1 * time.Second):
-			output.PrintProcessMonitors(startTime, cfg.Verbose, loader.Stats(), parser.Stats(), dbuf.Stats(), saver.Stats(), errsStats)
+			if cfg.Verbose{
+				output.PrintProcessMonitors(startTime, loader.Stats(), parser.Stats(), dbuf.Stats(), saver.Stats(), errmoder.Stats())
+			}
 		}
 	}
 	<-finish
-	output.PrintProcessMonitors(startTime, cfg.Verbose, loader.Stats(), parser.Stats(), dbuf.Stats(), saver.Stats(), errsStats)
+	if cfg.Verbose{
+		output.PrintProcessMonitors(startTime, loader.Stats(), parser.Stats(), dbuf.Stats(), saver.Stats(), errmoder.Stats())
+	}
 }
