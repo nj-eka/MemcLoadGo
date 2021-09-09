@@ -82,7 +82,7 @@ func (r *memcSavers) Run(ctx context.Context) <-chan struct{} {
 		ctx = cu.BuildContext(ctx, cu.AddContextOperation("workers"))
 		wg := sync.WaitGroup{}
 		wg.Add(len(r.memcClients))
-		defer OnExit(ctx, r.errCh, "workers", true, func(){
+		defer OnExit(ctx, r.errCh, "workers", func(){
 			wg.Wait()
 			r.stats.FinishTime = time.Now()
 			for deviceType, memcClient := range r.memcClients {
@@ -103,7 +103,7 @@ func (r *memcSavers) Run(ctx context.Context) <-chan struct{} {
 			go func(ctx context.Context, deviceType DeviceType) {
 				ctx = cu.BuildContext(ctx, cu.AddContextOperation(cu.Operation(fmt.Sprintf("mc-%s", deviceType))))
 				logging.Msg(ctx).Debugf("memc [%s] - started", deviceType)
-				defer OnExit(ctx, r.errCh, fmt.Sprintf("mc-%s", deviceType), true,
+				defer OnExit(ctx, r.errCh, fmt.Sprintf("mc-%s", deviceType),
 					func() {
 						wg.Done()
 					})

@@ -121,7 +121,7 @@ func (r *deviceTypeDBuffer) Run(ctx context.Context) <-chan struct{}  {
 		var wg sync.WaitGroup
 		wg.Add(2 * len(r.dtInputChs) * r.workersCount)
 		r.stats.StartTime = time.Now()
-		defer OnExit(ctx, r.errCh, "workers", true, func(){
+		defer OnExit(ctx, r.errCh, "workers", func(){
 			wg.Wait()
 			for _, outputCh := range r.dtOutputChs{
 				close(outputCh)
@@ -165,7 +165,7 @@ func (r *deviceTypeDBuffer) Run(ctx context.Context) <-chan struct{}  {
 				go func(ctx context.Context, wg *sync.WaitGroup, workerName string, outputCh chan<- *ProtoUserApps, dBuf *dbuf, stats *DBufferStats) {
 					ctx = cu.BuildContext(ctx, cu.AddContextOperation(cu.Operation(fmt.Sprintf("dequeue %s", workerName))))
 					logging.Msg(ctx).Debugf("start pumping out from [%s]", workerName)
-					defer OnExit(ctx, r.errCh, fmt.Sprintf("pumping out from [%s]", workerName), true, func() {
+					defer OnExit(ctx, r.errCh, fmt.Sprintf("pumping out from [%s]", workerName), func() {
 						stats.EndTime = time.Now()
 						if dBuf.que.Turbo() {
 							err := dBuf.que.TurboSync()

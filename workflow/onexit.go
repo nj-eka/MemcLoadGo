@@ -7,7 +7,7 @@ import (
 	"github.com/nj-eka/MemcLoadGo/logging"
 )
 
-func OnExit(ctx context.Context, cerr chan<- errs.Error, prefixMsg string, withMsg bool, fn func()) {
+func OnExit(ctx context.Context, cerr chan<- errs.Error, prefixMsg string, fn func()) {
 	defer func() {
 		if r := recover(); r != nil {
 			err, ok := r.(error)
@@ -28,7 +28,7 @@ func OnExit(ctx context.Context, cerr chan<- errs.Error, prefixMsg string, withM
 		case <-ctx.Done():
 			cerr <- errs.E(ctx, errs.KindInterrupted, fmt.Errorf("%s - interrupted: %w", prefixMsg, ctx.Err())) // panic on writing to closed channel
 		default:
-			if withMsg {
+			if len(prefixMsg) > 0 {
 				logging.Msg(ctx).Debug(prefixMsg, " - ok")
 			}
 		}

@@ -109,7 +109,7 @@ func (r *parser) Run(ctx context.Context) <-chan struct{} {
 		wp := make(chan struct{}, r.maxWorkers)
 
 
-		defer OnExit(ctx, r.errCh, "workers", true,
+		defer OnExit(ctx, r.errCh, "workers",
 			func() {
 				wg.Wait()
 				r.stats.EndTime = time.Now()
@@ -134,7 +134,7 @@ func (r *parser) Run(ctx context.Context) <-chan struct{} {
 
 func processInputString(ctx context.Context, wg *sync.WaitGroup, wp <-chan struct{}, inputString string, resChs map[DeviceType]chan *ProtoUserApps, errCh chan<- errs.Error, ignoreUnknownDeviceType bool, sts DeviceTypeParserStats) {
 	ctx = cu.BuildContext(ctx, cu.AddContextOperation("parsing"))
-	defer OnExit(ctx, errCh, "", false,
+	defer OnExit(ctx, errCh, "",
 		func() {
 			<-wp
 			wg.Done()

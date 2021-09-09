@@ -67,7 +67,7 @@ func (r *loader) Run(ctx context.Context) <-chan struct{} {
 
 	go func(ctx context.Context) {
 		ctx = cu.BuildContext(ctx, cu.AddContextOperation("iter_sources"))
-		defer OnExit(ctx, r.errCh, "iter_sources", true,
+		defer OnExit(ctx, r.errCh, "iter_sources",
 			func() {
 				close(source)
 			})
@@ -89,7 +89,7 @@ func (r *loader) Run(ctx context.Context) <-chan struct{} {
 		wg := sync.WaitGroup{}
 		wp := make(chan struct{}, r.maxWorkers)
 
-		defer OnExit(ctx, r.errCh, "workers", true,
+		defer OnExit(ctx, r.errCh, "workers",
 			func() {
 				// wait for graceful closing all open files
 				// with saving unprocessed data in current session
@@ -125,7 +125,7 @@ func (r *loader) Run(ctx context.Context) <-chan struct{} {
 
 func processFile(ctx context.Context, wg *sync.WaitGroup, wp <-chan struct{}, filePath string, resCh chan<- string, errCh chan<- errs.Error, sts *LoaderStats, dry bool) {
 	ctx = cu.BuildContext(ctx, cu.AddContextOperation("processFile"))
-	defer OnExit(ctx, errCh, fmt.Sprintf("reading file [%s]", filePath), true, func() {
+	defer OnExit(ctx, errCh, fmt.Sprintf("reading file [%s]", filePath), func() {
 		sts.FilesCounter.Add(1)
 		<-wp
 		wg.Done()
