@@ -16,6 +16,7 @@ func OnExit(ctx context.Context, cerr chan<- errs.Error, prefixMsg string, fn fu
 			}
 			logging.LogError(errs.E(ctx, errs.KindInternal, errs.SeverityCritical, fmt.Errorf("%s - failed: error channel closed + %w", prefixMsg, err)))
 		}
+		fn()
 	}()
 	if r := recover(); r != nil {
 		err, ok := r.(error)
@@ -33,5 +34,4 @@ func OnExit(ctx context.Context, cerr chan<- errs.Error, prefixMsg string, fn fu
 			}
 		}
 	}
-	fn()
 }
