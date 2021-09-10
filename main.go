@@ -235,7 +235,7 @@ func main() {
 	pipeline := []wrf.Pipeliner{errmoder, saver, dbuf, parser, loader}
 
 	// launch workflow
-	finish := wrf.Run(ctx, wrf.Pipelines(pipeline).Runners()...)
+	finish := wrf.Run(ctx, wrf.Pipeline(pipeline).Runners()...)
 
 mainloop:
 	for {
@@ -249,12 +249,12 @@ mainloop:
 			break mainloop
 		case <-time.After(1 * time.Second):
 			if cfg.Verbose{
-				output.PrintProcessMonitors(startTime, wrf.Pipelines(pipeline).StatProducers()...)
+				output.PrintProcessMonitors(startTime, wrf.Pipeline(pipeline).StatProducers()...)
 			}
 		}
 	}
 	<-finish
 	if cfg.Verbose{
-		output.PrintProcessMonitors(startTime, wrf.Pipelines(pipeline).StatProducers()...)
+		output.PrintProcessMonitors(startTime, wrf.Pipeline(pipeline).StatProducers()...)
 	}
 }

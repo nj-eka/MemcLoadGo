@@ -111,11 +111,6 @@ func (r *memcSavers) Run(ctx context.Context) <-chan struct{} {
 				inputs := r.dtInputs[deviceType]
 				sts := r.stats.DTStats[deviceType]
 				for {
-					//select {
-					//case <-ctx.Done():
-					//	return
-					//case protoUserApps, more := <-inputs:
-					// !writer should close channel if ctx.Done()
 					protoUserApps, more := <-inputs
 					if !more {
 						logging.Msg(ctx).Debugf("memc input channel [%s] - closed", deviceType)
