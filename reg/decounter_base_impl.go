@@ -1,20 +1,20 @@
-package regs
+package reg
 
 import (
 	"sync"
 )
 
-func NewDecounter(initCap int, on bool) Decounter {
-	return &decounter{hits: make(map[interface{}]Counter, initCap), isOn: on}
+func NewEncounter(initCap int, on bool) Encounter {
+	return &encounter{hits: make(map[interface{}]Counter, initCap), isOn: on}
 }
 
-type decounter struct {
+type encounter struct {
 	sync.RWMutex
 	hits map[interface{}]Counter
 	isOn bool
 }
 
-func (r *decounter) GetCounterPairs() []CounterPair {
+func (r *encounter) GetCounterPairs() []CounterPair {
 	if !r.isOn {
 		return []CounterPair{}
 	}
@@ -29,7 +29,7 @@ func (r *decounter) GetCounterPairs() []CounterPair {
 	return pairs
 }
 
-func (r *decounter) CheckIn(key interface{}) int {
+func (r *encounter) CheckIn(key interface{}) int {
 	if !r.isOn {
 		return 0
 	}
@@ -48,7 +48,7 @@ func (r *decounter) CheckIn(key interface{}) int {
 	return r.hits[key].Add(1)
 }
 
-func (r *decounter) GetScores() map[interface{}]int {
+func (r *encounter) GetScores() map[interface{}]int {
 	if !r.isOn {
 		return make(map[interface{}]int)
 	}
@@ -61,7 +61,7 @@ func (r *decounter) GetScores() map[interface{}]int {
 	return result
 }
 
-func (r *decounter) KeysCount() int {
+func (r *encounter) KeysCount() int {
 	if !r.isOn {
 		return 0
 	}
@@ -70,7 +70,7 @@ func (r *decounter) KeysCount() int {
 	return len(r.hits)
 }
 
-func (r *decounter) TotalCount() (totalCount int) {
+func (r *encounter) TotalCount() (totalCount int) {
 	if !r.isOn {
 		return 0
 	}

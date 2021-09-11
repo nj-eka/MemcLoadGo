@@ -1,4 +1,4 @@
-package regs
+package reg
 
 type Counter interface {
 	Add(num int) int
@@ -7,7 +7,7 @@ type Counter interface {
 	GetCountScore() (count int, score int)
 }
 
-type Decounter interface {
+type Encounter interface {
 	CheckIn(interface{}) int
 	GetScores() map[interface{}]int
 	GetCounterPairs() []CounterPair

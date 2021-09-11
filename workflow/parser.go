@@ -7,7 +7,7 @@ import (
 	cu "github.com/nj-eka/MemcLoadGo/ctxutils"
 	"github.com/nj-eka/MemcLoadGo/errs"
 	"github.com/nj-eka/MemcLoadGo/logging"
-	"github.com/nj-eka/MemcLoadGo/regs"
+	"github.com/nj-eka/MemcLoadGo/reg"
 	"google.golang.org/protobuf/proto"
 	"sort"
 	"strconv"
@@ -33,9 +33,9 @@ type DeviceRecord struct {
 }
 
 type ParserStats interface {
-	ItemsCounter() regs.Counter
-	InputBytesCounter() regs.Counter
-	OutputBytesCounter() regs.Counter
+	ItemsCounter() reg.Counter
+	InputBytesCounter() reg.Counter
+	OutputBytesCounter() reg.Counter
 }
 
 type DeviceTypeParserStats struct {
@@ -44,18 +44,18 @@ type DeviceTypeParserStats struct {
 }
 
 type parserStats struct {
-	itemsCounter, inputBytesCounter, outputBytesCounter regs.Counter
+	itemsCounter, inputBytesCounter, outputBytesCounter reg.Counter
 }
 
-func (r *parserStats) ItemsCounter() regs.Counter {
+func (r *parserStats) ItemsCounter() reg.Counter {
 	return r.itemsCounter
 }
 
-func (r *parserStats) InputBytesCounter() regs.Counter {
+func (r *parserStats) InputBytesCounter() reg.Counter {
 	return r.inputBytesCounter
 }
 
-func (r *parserStats) OutputBytesCounter() regs.Counter {
+func (r *parserStats) OutputBytesCounter() reg.Counter {
 	return r.outputBytesCounter
 }
 
@@ -83,9 +83,9 @@ func NewParser(ctx context.Context, inputCh <-chan string, maxWorkers int, devic
 	for deviceType := range deviceTypes {
 		resChs[deviceType] = make(chan *ProtoUserApps, maxWorkers)
 		dtStats.DTStats[deviceType] = &parserStats{
-			itemsCounter:       regs.NewCounter(0, statsOn),
-			inputBytesCounter:  regs.NewCounter(0, statsOn),
-			outputBytesCounter: regs.NewCounter(0, statsOn),
+			itemsCounter:       reg.NewCounter(0, statsOn),
+			inputBytesCounter:  reg.NewCounter(0, statsOn),
+			outputBytesCounter: reg.NewCounter(0, statsOn),
 		}
 	}
 	return &parser{

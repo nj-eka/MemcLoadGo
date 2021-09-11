@@ -7,7 +7,7 @@ import (
 	erf "github.com/nj-eka/MemcLoadGo/errsflow"
 	"github.com/nj-eka/MemcLoadGo/fh"
 	"github.com/nj-eka/MemcLoadGo/logging"
-	"github.com/nj-eka/MemcLoadGo/regs"
+	"github.com/nj-eka/MemcLoadGo/reg"
 	"github.com/nj-eka/MemcLoadGo/workflow"
 	"math"
 	"os"
@@ -154,7 +154,7 @@ func PrintProcessMonitors(
 		cp := errsStats.GetCounterPairs()
 		if len(cp) > 0 {
 			bout(fmt.Sprintln(colorRed, "Errors:"))
-			sort.Sort(regs.CounterPairsByKey(cp))
+			sort.Sort(reg.CounterPairsByKey(cp))
 			for _, cp := range cp {
 				esk := cp.Key.(erf.ErrStatKey)
 				bout(fmt.Sprintf(" *%-8s: %-48s # %4d - %s\n", esk.Severity, esk.Operations, cp.Count, esk.Kind))

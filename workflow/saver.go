@@ -7,14 +7,14 @@ import (
 	cu "github.com/nj-eka/MemcLoadGo/ctxutils"
 	"github.com/nj-eka/MemcLoadGo/errs"
 	"github.com/nj-eka/MemcLoadGo/logging"
-	"github.com/nj-eka/MemcLoadGo/regs"
+	"github.com/nj-eka/MemcLoadGo/reg"
 	"sort"
 	"sync"
 	"time"
 )
 
 type SaverStats struct {
-	ItemsCounter regs.Counter
+	ItemsCounter reg.Counter
 }
 
 type DeviceTypeSaverStats struct {
@@ -58,7 +58,7 @@ func NewMemcSaver(ctx context.Context, dtInputs map[DeviceType]chan *ProtoUserAp
 		// mc.MaxIdleConns
 		memcClients[deviceType] = mc
 		stats.DTStats[deviceType] = &SaverStats{
-			ItemsCounter: regs.NewCounter(0, statsOn),
+			ItemsCounter: reg.NewCounter(0, statsOn),
 		}
 		logging.Msg(ctx).Debugf("memc client [%s] on addr [%s] set with timeout = [%v] retries = [%d] retry_timeout = [%v]", deviceType, addr, timeout, maxRetries, retryTimeout)
 	}

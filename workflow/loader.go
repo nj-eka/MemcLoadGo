@@ -9,7 +9,7 @@ import (
 	"github.com/nj-eka/MemcLoadGo/errs"
 	"github.com/nj-eka/MemcLoadGo/fh"
 	"github.com/nj-eka/MemcLoadGo/logging"
-	"github.com/nj-eka/MemcLoadGo/regs"
+	"github.com/nj-eka/MemcLoadGo/reg"
 	"io"
 	"os"
 	"os/user"
@@ -21,7 +21,7 @@ import (
 
 type LoaderStats struct {
 	StartTime, FinishTime      time.Time
-	FilesCounter, ItemsCounter regs.Counter
+	FilesCounter, ItemsCounter reg.Counter
 }
 
 type Loader interface {
@@ -52,8 +52,8 @@ func NewLoader(ctx context.Context, filePaths []string, maxWorkers int, usr *use
 		resCh:      make(chan string, maxWorkers),
 		errCh:      make(chan errs.Error, maxWorkers*8),
 		stats: LoaderStats{
-			FilesCounter: regs.NewCounter(0, statsOn),
-			ItemsCounter: regs.NewCounter(0, statsOn),
+			FilesCounter: reg.NewCounter(0, statsOn),
+			ItemsCounter: reg.NewCounter(0, statsOn),
 		},
 	}
 }

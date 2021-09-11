@@ -7,7 +7,7 @@ import (
 	cu "github.com/nj-eka/MemcLoadGo/ctxutils"
 	"github.com/nj-eka/MemcLoadGo/errs"
 	"github.com/nj-eka/MemcLoadGo/logging"
-	"github.com/nj-eka/MemcLoadGo/regs"
+	"github.com/nj-eka/MemcLoadGo/reg"
 	"sort"
 	"sync"
 	"time"
@@ -90,10 +90,10 @@ func NewDTDBuffer(ctx context.Context, dtInputChs map[DeviceType]chan *ProtoUser
 				}
 				dBufs[workerName] = &dBuf
 				stats.DTInputStats[workerName] = &DBufferStats{
-					ItemsCounter: regs.NewCounter(0, statsOn),
+					ItemsCounter: reg.NewCounter(0, statsOn),
 				}
 				stats.DTOutputStats[workerName] = &DBufferStats{
-					ItemsCounter: regs.NewCounter(0, statsOn),
+					ItemsCounter: reg.NewCounter(0, statsOn),
 				}
 			} else {
 				return nil, errs.E(ctx, errs.SeverityCritical, errs.KindDBuff, fmt.Errorf("init dbuffer [%s] failed: %w ", deviceType, err))
@@ -236,7 +236,7 @@ func ProtoUserAppsBuilder() interface{} {
 }
 
 type DBufferStats struct {
-	ItemsCounter regs.Counter
+	ItemsCounter reg.Counter
 	EndTime      time.Time
 }
 

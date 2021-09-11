@@ -1,4 +1,4 @@
-package regs
+package reg
 
 import (
 	"sync"
